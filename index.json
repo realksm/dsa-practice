@@ -34,7 +34,8 @@
         "meta.json",
         "problem.md"
       ],
-      "hash": "dd50a2d4b0053395"
+      "hash": "dd50a2d4b0053395",
+      "hints": 4
     },
     {
       "slug": "two-sum",
@@ -70,7 +71,8 @@
         "meta.json",
         "problem.md"
       ],
-      "hash": "cbb99a86a53f78ac"
+      "hash": "cbb99a86a53f78ac",
+      "hints": 4
     }
   ]
 }
