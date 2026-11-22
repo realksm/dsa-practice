@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "problems": [
+    {
+      "slug": "max-subarray",
+      "title": "Maximum Subarray Sum",
+      "difficulty": "easy",
+      "tags": [
+        "arrays",
+        "dynamic-programming",
+        "kadane"
+      ],
+      "files": [
+        ".data/01.in",
+        ".data/01.out",
+        ".data/02.in",
+        ".data/02.out",
+        ".data/03.in",
+        ".data/03.out",
+        ".data/04.in",
+        ".data/04.out",
+        ".data/05.in",
+        ".data/05.out",
+        ".data/06.in",
+        ".data/06.out",
+        ".data/07.in",
+        ".data/07.out",
+        ".data/08.in",
+        ".data/08.out",
+        ".data/09.in",
+        ".data/09.out",
+        ".data/10.in",
+        ".data/10.out",
+        "meta.json",
+        "problem.md"
+      ],
+      "hash": "dd50a2d4b0053395"
+    },
+    {
+      "slug": "two-sum",
+      "title": "Two Sum",
+      "difficulty": "easy",
+      "tags": [
+        "arrays",
+        "hashing"
+      ],
+      "files": [
+        ".data/01.in",
+        ".data/01.out",
+        ".data/02.in",
+        ".data/02.out",
+        ".data/03.in",
+        ".data/03.out",
+        ".data/04.in",
+        ".data/04.out",
+        ".data/05.in",
+        ".data/05.out",
+        ".data/06.in",
+        ".data/06.out",
+        ".data/07.in",
+        ".data/07.out",
+        ".data/08.in",
+        ".data/08.out",
+        ".data/09.in",
+        ".data/09.out",
+        ".data/10.in",
+        ".data/10.out",
+        ".data/11.in",
+        ".data/11.out",
+        "meta.json",
+        "problem.md"
+      ],
+      "hash": "cbb99a86a53f78ac"
+    }
+  ]
+}

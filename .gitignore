@@ -1,0 +1,7 @@
+# reference solutions are private, never commit them
+references/
+node_modules/
+# compiled authoring scripts
+authoring/out/
+# the old judge.py tool, kept locally only; delete when no longer needed
+legacy/

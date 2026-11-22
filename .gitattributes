@@ -1,0 +1,7 @@
+# Problem files are served raw to every platform: keep them LF in the repo and in every
+# checkout, so a Windows clone feeds programs the same bytes as Linux CI.
+problems/** text eol=lf
+index.json text eol=lf
+problems/**/*.png binary
+problems/**/*.jpg binary
+problems/**/*.gif binary

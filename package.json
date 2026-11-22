@@ -1,0 +1,10 @@
+{
+  "name": "dsa-practice",
+  "private": true,
+  "description": "Problems for the DSA Drill VS Code extension, plus the scripts that author them.",
+  "scripts": {
+    "new": "npm run -s --prefix extension compile:authoring && node authoring/out/authoring/new.js",
+    "build": "npm run -s --prefix extension compile:authoring && node authoring/out/authoring/build.js",
+    "check": "npm run -s --prefix extension compile:authoring && node authoring/out/authoring/check.js"
+  }
+}

@@ -1,0 +1,233 @@
+{
+  "name": "dsa-drill",
+  "displayName": "DSA Drill",
+  "description": "Practice data structures and algorithms problems and run their tests inside VS Code.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "publisher": "dsa-drill",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Testing",
+    "Education",
+    "Programming Languages"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onLanguage:cpp",
+    "onLanguage:java",
+    "onLanguage:python"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "dsaDrill.runTests",
+        "title": "Run Tests",
+        "category": "DSA Drill",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dsaDrill.runCustomInput",
+        "title": "Run Custom Input",
+        "category": "DSA Drill",
+        "icon": "$(debug-console)"
+      },
+      {
+        "command": "dsaDrill.stop",
+        "title": "Stop Running",
+        "category": "DSA Drill",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "dsaDrill.showResults",
+        "title": "Show Test Results",
+        "category": "DSA Drill"
+      },
+      {
+        "command": "dsaDrill.refreshProblems",
+        "title": "Refresh Problems",
+        "category": "DSA Drill",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dsaDrill.openProblem",
+        "title": "Open Problem…",
+        "category": "DSA Drill"
+      },
+      {
+        "command": "dsaDrill.openProblemInLanguage",
+        "title": "Open in Another Language…",
+        "category": "DSA Drill"
+      },
+      {
+        "command": "dsaDrill.updateProblem",
+        "title": "Update Tests",
+        "category": "DSA Drill",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "dsaDrill.updateAllProblems",
+        "title": "Update Tests of All Downloaded Problems",
+        "category": "DSA Drill"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsaDrill",
+          "title": "DSA Drill",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dsaDrill": [
+        {
+          "id": "dsaDrill.problems",
+          "name": "Problems"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "dsaDrill.refreshProblems",
+          "when": "view == dsaDrill.problems",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dsaDrill.updateProblem",
+          "when": "view == dsaDrill.problems && viewItem == problem.outdated",
+          "group": "inline"
+        },
+        {
+          "command": "dsaDrill.openProblemInLanguage",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem/",
+          "group": "1_open"
+        },
+        {
+          "command": "dsaDrill.updateProblem",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.(local|outdated)$/",
+          "group": "2_update"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "dsaDrill.runTests",
+          "when": "dsaDrill.activeIsSolution",
+          "group": "navigation@0"
+        },
+        {
+          "command": "dsaDrill.runCustomInput",
+          "when": "dsaDrill.activeIsSolution",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dsaDrill.runTests",
+          "when": "editorLangId =~ /^(cpp|java|python)$/"
+        },
+        {
+          "command": "dsaDrill.runCustomInput",
+          "when": "editorLangId =~ /^(cpp|java|python)$/"
+        },
+        {
+          "command": "dsaDrill.openProblemInLanguage",
+          "when": "false"
+        },
+        {
+          "command": "dsaDrill.updateProblem",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dsaDrill.runTests",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus && dsaDrill.activeIsSolution"
+      }
+    ],
+    "configuration": {
+      "title": "DSA Drill",
+      "properties": {
+        "dsaDrill.repo": {
+          "type": "string",
+          "default": "realksm/dsa-practice",
+          "markdownDescription": "Where problems come from: a public GitHub repo (`owner/repo`, `owner/repo@branch` or a github.com URL), or a local folder that has a `problems/` folder in it."
+        },
+        "dsaDrill.workspaceFolder": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Folder that opened problems are downloaded into (each gets its own subfolder). Empty = the first folder of the open workspace."
+        },
+        "dsaDrill.defaultLanguage": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "cpp", "java", "python"],
+          "enumItemLabels": ["Ask each time", "C++", "Java", "Python"],
+          "description": "Language for newly opened problems. Empty = ask each time."
+        },
+        "dsaDrill.compilers.cpp": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "C++ compiler command or full path. Empty = `g++`."
+        },
+        "dsaDrill.compilers.javac": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Java compiler command or full path. Empty = `javac`."
+        },
+        "dsaDrill.compilers.java": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Java runtime command or full path. Empty = `java`."
+        },
+        "dsaDrill.compilers.python": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Python command or full path. Empty = `python` on Windows, `python3` elsewhere."
+        },
+        "dsaDrill.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show 'Run Tests' links at the top of solution files."
+        },
+        "dsaDrill.customInputTimeLimit": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Seconds a 'Run Custom Input' run may take before it is stopped."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "files.exclude": {
+        "**/.data": true
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -p . --watch",
+    "vscode:prepublish": "npm run build",
+    "test": "tsc -p . && node --test \"out/test/**/*.test.js\"",
+    "test:vscode": "tsc -p . && node out/test/vscode/run.js",
+    "judge": "node out/src/cli.js",
+    "index": "tsc -p . && node out/src/problems/buildIndexCli.js",
+    "compile:authoring": "tsc -p ../authoring"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^3.1.0",
+    "typescript": "^7.0.2"
+  }
+}

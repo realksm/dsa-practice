@@ -1,0 +1,17 @@
+{
+  // Compiled with the extension's TypeScript: npm run build (from the repo root) does this.
+  // rootDir is the repo root so the scripts can import the judge and index code from extension/src.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "rootDir": "..",
+    "outDir": "out",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "typeRoots": ["../extension/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["*.ts"]
+}

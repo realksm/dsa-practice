@@ -1,0 +1,21 @@
+# Every push: each problem has problem.md, valid meta.json and .in/.out pairs, and index.json
+# matches problems/. Needs no compilers: expected outputs are generated locally by npm run build.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  problems:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+        working-directory: extension
+      - run: npm run check

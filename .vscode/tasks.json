@@ -1,0 +1,48 @@
+{
+  // Authoring tasks: Ctrl+Shift+P -> "Tasks: Run Task".
+  // Running a solution's tests is done by the extension itself (Run Tests, Ctrl+Alt+R).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // used by F5 ("Run DSA Drill extension" in launch.json)
+      "label": "Extension: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/extension" },
+      "problemMatcher": "$tsc",
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "Problems: new",
+      "type": "shell",
+      "command": "npm run -s new ${input:slug}",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "showReuseMessage": false },
+      "problemMatcher": []
+    },
+    {
+      "label": "Problems: build (.out files + index.json)",
+      "type": "shell",
+      "command": "npm run -s build",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "showReuseMessage": false },
+      "problemMatcher": []
+    },
+    {
+      "label": "Problems: build + stress test ref vs naive",
+      "type": "shell",
+      "command": "npm run -s build -- --stress 500",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "showReuseMessage": false },
+      "problemMatcher": []
+    },
+    {
+      "label": "Problems: check (what CI runs)",
+      "type": "shell",
+      "command": "npm run -s check",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true, "showReuseMessage": false },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    { "id": "slug", "type": "promptString", "description": "Problem slug: lowercase letters, digits and dashes (e.g. two-sum)" }
+  ]
+}

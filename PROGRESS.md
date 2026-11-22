@@ -1,0 +1,198 @@
+# Progress log
+
+Read with [PLAN.md](PLAN.md), which has the goal, the decisions and the full build order.
+Last updated: 2026-11-22.
+
+The extension is called **DSA Drill** (package `dsa-drill`, IDs and settings `dsaDrill.*`). It was "CP Judge"
+until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now sits in `legacy/` (gitignored).
+
+## Where things stand
+
+| Phase | Status |
+|---|---|
+| 1. Judge engine in TypeScript | ✅ Done |
+| 2. Local VS Code extension | ✅ Done |
+| 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
+| 4. Authoring scripts + CI, port existing problems | 🟡 Steps 1–4 done 2026-11-22; step 5 (git init + push) left |
+| 5. Polish (solved tracking, tags, publish) | Not started |
+
+The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`). On 2026-11-22
+`index.json` there gave a 404 because nothing had been pushed yet.
+
+## How to pick up again
+
+```
+cd extension
+npm install                  # only if node_modules/ is missing
+npm test                     # 45 unit tests (engine, compile errors, problems/index/download), about 6 s
+npm run test:vscode          # 15 tests inside a real VS Code (judge + Problems sidebar)
+npm run judge -- <solution>  # judge from the terminal
+npm run index                # rebuild ../index.json from ../problems/ (--check: fail if stale)
+```
+
+Authoring, from the repo root (`D:\cp-judge`), also as tasks in `.vscode/tasks.json`:
+
+```
+npm run new <slug>           # scaffold problems/<slug>/ + references/<slug>/ref.cpp
+npm run build                # ref on every .in -> .out, time-limit check, validate, rebuild index.json
+npm run build -- --stress    # + ref vs naive on 200 inputs from gen.* (--stress N for N)
+npm run check                # what CI runs: validation + index.json up to date, no compilers needed
+```
+
+- **Try it by hand:** open `D:\cp-judge` in VS Code and press **F5**. A second window opens on
+  `extension/test/fixtures/workspace`. To try the sidebar without GitHub, set `dsaDrill.repo` to
+  `D:\cp-judge\extension\test\fixtures\repo` (any local folder with a `problems/` folder works; with no
+  `index.json` the index is built on the fly).
+- **If `test:vscode` says "Code is currently being updated":** the installed VS Code had an unfinished
+  update. Restart VS Code, or run `VSCODE_EXECUTABLE=download npm run test:vscode`, which uses the copy
+  already downloaded into `extension/.vscode-test/` (gitignored). This happened again on 2026-11-22.
+
+## What exists
+
+```
+extension/
+  src/judge/compare.ts      token compare: ints exact (BigInt), decimals within eps, nan never matches
+  src/judge/runner.ts       spawn with time limit, output cap, cancel; describeExit (0xC00000FD etc.)
+  src/judge/languages.ts    cpp (g++ -O2, 256 MB stack on Windows), java (Main.java, -Xss256m), python
+  src/judge/tests.ts        reads .data/NN.in + NN.out|.ans (natural order), meta.json
+  src/judge/judge.ts        judge(): every case with live progress; runOnInput(): custom input
+  src/problems/indexFile.ts index.json types, parseIndex (validates slugs and paths), buildIndex, hashFiles
+  src/problems/source.ts    parseRepo; GitHubSource (raw.githubusercontent, pinned to a commit); LocalSource
+  src/problems/install.ts   installProblem (download/update), addSolution, scanLocal, isOutdated
+  src/problems/starters.ts  built-in starter templates per language
+  src/problems/view.ts      Problems sidebar (TreeView) + open/refresh/update commands
+  src/problems/buildIndexCli.ts  npm run index
+  src/cli.ts                terminal front end (npm run judge)
+  src/extension.ts          commands, CodeLens, status bar, Problems-panel errors, ".data next to file" detection
+  src/diagnostics.ts        parses g++ / javac error lines
+  src/ui/resultsPanel.ts    webview panel host (state is pushed to the webview as one object)
+  media/results.js|css      panel UI (theme colours, expand/collapse, diff line highlight, custom input box)
+  media/icon.svg            activity bar icon
+  test/*.test.ts            node:test unit tests
+  test/vscode/run.ts        launches VS Code with the extension; copies fixtures/repo to a temp dir
+  test/vscode/suite.ts      in-editor tests
+  test/fixtures/workspace/  sample problems in the new layout (also the download target in the tests)
+  test/fixtures/repo/       a tiny problems repo: add-two (easy, has a Python starter), max-pair (medium)
+authoring/common.ts         paths, validateProblem/validateMeta (shared by build and check)
+authoring/new.ts|build.ts|check.ts   the npm run new / build / check scripts
+authoring/tsconfig.json     compiled by the extension's tsc (npm run compile:authoring in extension/)
+                            into authoring/out/ (gitignored); rootDir is the repo root so it imports
+                            extension/src/judge and indexFile directly
+package.json (root)         only the three scripts; no dependencies of its own
+problems/max-subarray/      10 tests (old 5 + overflow/all-negative/zeros + one n=2e5 case)
+problems/two-sum/           11 tests (examples, duplicates, overflow, two n=2e5 cases)
+references/<slug>/          ref.cpp, naive.cpp, gen.py for both (gitignored: back it up)
+index.json                  generated by npm run build (2 problems)
+.github/workflows/check.yml npm ci in extension/, then npm run check (Node 24, ubuntu)
+.gitattributes              problems/** and index.json are eol=lf
+.vscode/launch.json         F5 config
+.vscode/tasks.json          Extension: build + Problems: new / build / build+stress / check
+.gitignore                  references/, node_modules/, authoring/out/, legacy/
+legacy/                     old judge.py, PROMPT.md, README.md, old problems, old tasks.json (not committed)
+```
+
+### Extension surface (package.json)
+
+- **Commands:** `dsaDrill.runTests`, `dsaDrill.runCustomInput`, `dsaDrill.stop`, `dsaDrill.showResults`,
+  `dsaDrill.refreshProblems`, `dsaDrill.openProblem`, `dsaDrill.openProblemInLanguage`, `dsaDrill.updateProblem`,
+  `dsaDrill.updateAllProblems`.
+  `runTests` returns the JudgeReport, `runCustomInput(uri, input)` returns the result,
+  `openProblem(slug, language?)` returns `{ dir, solution, createdSolution }`, `updateProblem(slug)` returns
+  the number updated. The tests use these return values.
+- **Sidebar:** activity bar container `dsaDrill`, view `dsaDrill.problems`. Groups Easy, Medium, Hard, other
+  difficulties, then Unrated. Icons: not downloaded / downloaded / tests updated (with an inline update
+  button). Context menu: Open in Another Language, Update Tests. Errors show as one row in the tree
+  (click: retry, or open settings when `dsaDrill.repo` can't be parsed).
+- **Keybinding:** Ctrl+Alt+R (Cmd+Alt+R on Mac), only when the active file is a solution.
+- **Settings:** `dsaDrill.repo` (default `realksm/dsa-practice`), `dsaDrill.workspaceFolder` (empty = first
+  workspace folder; with no folder open it asks and saves the answer globally), `dsaDrill.defaultLanguage`,
+  `dsaDrill.compilers.{cpp,javac,java,python}`, `dsaDrill.codeLens`, `dsaDrill.customInputTimeLimit`.
+- **Hiding `.data`:** done with `configurationDefaults` for `files.exclude`, so the extension writes no settings
+  file. A test confirms the defaults like `**/.git` are kept.
+- **A "solution file":** any .cpp/.cc/.cxx/.java/.py file with a `.data/` folder next to it.
+
+### index.json
+
+```json
+{ "version": 1, "problems": [ { "slug": "add-two", "title": "Add Two", "difficulty": "easy",
+  "tags": ["math"], "files": [".data/01.in", ".data/01.out", "meta.json", "problem.md",
+  "starters/solution.py"], "hash": "16 hex chars" } ] }
+```
+
+- `files` are relative to `problems/<slug>/`. `hash` covers everything except `starters/`, with CRLF
+  normalised to LF, so a Windows checkout and Linux CI give the same hash and a starter edit doesn't count
+  as a test change.
+- buildIndex includes a folder only if it has `problem.md`, `meta.json` and at least one `.data/*.in`.
+  Others are listed as skipped. An `.in` without an `.out` is a warning. `npm run check` turns both into
+  errors: every folder under `problems/` is meant to be published.
+
+### Downloaded problem layout
+
+```
+<workspaceFolder>/<slug>/problem.md, meta.json, solution.py (only created if missing)
+<workspaceFolder>/<slug>/.data/01.in 01.out ... .source.json   { slug, hash, repo }
+```
+
+Opening a problem opens the solution on the left and the rendered `problem.md` on the right.
+
+### meta.json fields the engine reads
+`timeLimit` (seconds, default 2), `exact`, `ignoreCase`, `eps`. `title`, `difficulty`, `tags` are used by the
+index. `memoryLimit` is stored but not used yet.
+
+## Decisions made along the way
+
+- **The engine compares integers exactly.** The old judge.py let `2e14` pass when off by `1e8`, and `nan` matched
+  anything. Both are fixed and tested.
+- **The C++ deep-recursion test** needs about 80 MB of stack. A simpler version got optimised away by g++ and
+  proved nothing.
+- **No ThemeIcon for the panel tab:** the VS Code 1.90 typings don't allow it. `engines.vscode` is `^1.90.0`.
+- **TypeScript 7** (the Go-based `tsc`) is what npm installed. It works fine.
+- **Java gets the same time limit as C++** for now, so JVM startup (about 100 ms) counts. Consider a multiplier later.
+- **GitHub reads are pinned to a commit.** On refresh, one API call (`/repos/o/r/commits/HEAD`, header
+  `Accept: application/vnd.github.sha`) turns the branch into a SHA, and every raw URL uses that SHA. This
+  avoids the ~5 minute raw cache after a push, and the files always match the index. If the API fails
+  (60 calls an hour without a token) it falls back to the branch name (`HEAD` by default).
+- **Updating replaces `.data/` as a whole**, so test files a user added by hand are lost. `problem.md` and
+  `meta.json` are replaced too. Solution files and any other files in the folder are never touched. All
+  files are fetched before anything is written, and the new `.data` is built next to the old one and
+  then renamed into place.
+- **A folder with the same slug but no `.source.json`** (made by hand) shows as "tests updated", so the
+  user can pull the real tests into it.
+- **Clicking a problem** reopens your solution if there is exactly one. Otherwise it asks the language,
+  unless `dsaDrill.defaultLanguage` is set and no solution exists yet. "Open in Another Language" always asks.
+- The repo must be **public** (no token support).
+
+## Known gaps / ideas (not blocking)
+
+- Compiler warnings from a successful compile are dropped (only errors reach the Problems panel).
+- Python tracebacks aren't mapped to Problems-panel locations.
+- Every run compiles again; there's no cache between Run Tests and Run Custom Input.
+- Not checked by eye in light/dark themes yet; only checked that it renders. The sidebar hasn't been
+  looked at by eye either (its contents are checked by the tests).
+- No proxy handling beyond what VS Code gives the global `fetch`.
+
+## Phase 4 decisions (2026-11-22)
+
+- `two-sum` was only a placeholder (its naive.cpp summed the array), so it got a real statement: print
+  1-based `i j` with `a_i + a_j = t`, smallest `j` first, then smallest `i`; `-1` if none. Its old
+  `tests.txt` had no target, so all its tests are new.
+- `max-subarray`: the reference is a correct Kadane `ref.cpp`; the old naive.cpp (O(n^2)) is the stress
+  naive, because it would be too slow on the n = 2e5 test.
+- build.ts runs the reference with a timeout of 4x the limit (at least 10 s) so a slow reference reports its
+  real time. Over the limit is an error; over half of it is a warning. A rewritten `.out` is printed as
+  `CHANGED`. A stress mismatch saves the input to `references/<slug>/stress-<seed>.in`. With any error,
+  index.json is not written.
+- validateProblem also rejects old-layout files in a problem folder (tests.txt, naive.*, solution.*, ...),
+  `TODO` left in problem.md, empty `.in` files, `.out` without `.in`, and bad meta (difficulty must be
+  easy/medium/hard, timeLimit 0-30 s).
+- `indexText()` in indexFile.ts is the one place that formats index.json (build, check and npm run index).
+- The old tool was moved to `legacy/`, not deleted (no git history yet to recover it from).
+- CI does not run the extension's unit tests (not yet tried on Linux).
+
+## Next steps
+
+1. `git init`, commit (check `git status` shows no `references/` or `legacy/`), push to
+   `realksm/dsa-practice` (public), then check the CI run and the sidebar against the real repo.
+2. Back up `references/` somewhere outside the repo.
+3. Delete `legacy/` once it's no longer wanted.
+4. Phase 5: solved tracking, tags/filter, Marketplace publish.
