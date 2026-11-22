@@ -1,0 +1,10 @@
+# Only out/src, media, package.json, README, LICENSE and CHANGELOG go into the .vsix.
+.vscode-test/**
+src/**
+test/**
+out/test/**
+**/*.map
+**/*.ts
+tsconfig.json
+.gitignore
+*.vsix

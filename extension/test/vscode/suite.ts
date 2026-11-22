@@ -105,7 +105,7 @@ it("a file without .data gets no CodeLens", async () => {
 
 // ---- problems sidebar, against a local fixture repo (no network) ----
 
-type Row = { slug?: string; group?: string; local?: boolean; outdated?: boolean; message?: string };
+type Row = { slug?: string; group?: string; local?: boolean; outdated?: boolean; solved?: boolean; message?: string };
 const repo = () => process.env.DSA_DRILL_TEST_REPO!;
 const rows = (): Row[] => vscode.extensions.all.find((e) => e.packageJSON.name === "dsa-drill")!.exports._test.problems();
 const read = (rel: string) => fs.readFile(path.join(ws(), rel), "utf8");
@@ -117,8 +117,8 @@ it("lists the repo's problems grouped by difficulty", async () => {
   await vscode.workspace.getConfiguration("dsaDrill").update("repo", repo(), vscode.ConfigurationTarget.Global);
   await vscode.commands.executeCommand("dsaDrill.refreshProblems");
   assert.deepEqual(rows(), [
-    { slug: "add-two", group: "easy", local: false, outdated: false },
-    { slug: "max-pair", group: "medium", local: false, outdated: false },
+    { slug: "add-two", group: "easy", local: false, outdated: false, solved: false },
+    { slug: "max-pair", group: "medium", local: false, outdated: false, solved: false },
   ]);
 });
 
@@ -129,7 +129,7 @@ it("opening a problem downloads it, writes the repo's starter and opens it", asy
   assert.match(await read("add-two/solution.py"), /^a, b = map\(int/);
   assert.equal(await read("add-two/.data/02.out"), "42\n");
   assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, r.solution);
-  assert.deepEqual(rows()[0], { slug: "add-two", group: "easy", local: true, outdated: false });
+  assert.deepEqual(rows()[0], { slug: "add-two", group: "easy", local: true, outdated: false, solved: false });
 });
 
 it("a downloaded problem runs its tests (built-in C++ starter, no repo starter)", async () => {
@@ -148,6 +148,8 @@ it("opening again never overwrites your solution", async () => {
   assert.match(await read("add-two/solution.py"), /print\(a \+ b\)/);
   const report = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", vscode.Uri.file(r.solution!));
   assert.equal(report.passed, 2);
+  assert.equal(rows()[0].solved, true, "all tests passed: add-two is solved");
+  assert.equal(rows()[1].solved, false, "max-pair failed its tests");
 });
 
 it("changed tests are flagged, and updating keeps the solution", async () => {
@@ -155,8 +157,8 @@ it("changed tests are flagged, and updating keeps the solution", async () => {
   await fs.writeFile(path.join(data, "03.in"), "-5 5\n");
   await fs.writeFile(path.join(data, "03.out"), "0\n");
   await vscode.commands.executeCommand("dsaDrill.refreshProblems");
-  assert.deepEqual(rows()[0], { slug: "add-two", group: "easy", local: true, outdated: true });
-  assert.deepEqual(rows()[1], { slug: "max-pair", group: "medium", local: true, outdated: false });
+  assert.deepEqual(rows()[0], { slug: "add-two", group: "easy", local: true, outdated: true, solved: true });
+  assert.deepEqual(rows()[1], { slug: "max-pair", group: "medium", local: true, outdated: false, solved: false });
 
   assert.equal(await vscode.commands.executeCommand("dsaDrill.updateProblem", "add-two"), 1);
   assert.equal(await read("add-two/.data/03.out"), "0\n");
@@ -164,6 +166,23 @@ it("changed tests are flagged, and updating keeps the solution", async () => {
   assert.equal(rows()[0].outdated, false);
   const report = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", vscode.Uri.file(path.join(ws(), "add-two", "solution.py")));
   assert.equal(report.passed, 3);
+});
+
+it("the filter hides solved problems and narrows by tag", async () => {
+  const slugs = () => rows().map((r) => r.slug ?? r.message);
+  await vscode.commands.executeCommand("dsaDrill.filterProblems", { tags: [], hideSolved: true });
+  assert.deepEqual(slugs(), ["max-pair"]);
+  await vscode.commands.executeCommand("dsaDrill.filterProblems", { tags: ["math"], hideSolved: false });
+  assert.deepEqual(slugs(), ["add-two"]);
+  await vscode.commands.executeCommand("dsaDrill.filterProblems", { tags: ["math"], hideSolved: true });
+  assert.deepEqual(slugs(), ["No problems match the filter."]);
+  await vscode.commands.executeCommand("dsaDrill.clearFilter");
+  assert.deepEqual(slugs(), ["add-two", "max-pair"]);
+});
+
+it("Mark as Unsolved clears the solved state", async () => {
+  await vscode.commands.executeCommand("dsaDrill.markUnsolved", "add-two");
+  assert.equal(rows()[0].solved, false);
 });
 
 it("a bad repo setting shows a message in the sidebar instead of failing", async () => {

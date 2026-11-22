@@ -90,6 +90,7 @@ git push                   users see it on next refresh
 4. ✅ **Authoring scripts + CI check**; port max-subarray and two-sum as the first problems.
    Done: `authoring/`, `npm run new|build|check`, `.github/workflows/check.yml`. Pushed 2026-11-22.
 5. **Polish**: solved tracking, tags/filter, Marketplace publish.
+   Done: solved tracking, filter, `.vsix` packaging (0.1.0). Left: Marketplace publish.
 
 Phases 1–2 already replace judge.py for local use.
 

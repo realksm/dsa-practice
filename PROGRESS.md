@@ -14,7 +14,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 2. Local VS Code extension | ✅ Done |
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
-| 5. Polish (solved tracking, tags, publish) | Not started |
+| 5. Polish (solved tracking, tags, publish) | 🟡 Solved tracking + filter done, `.vsix` packaged (2026-11-22); Marketplace not done |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -27,8 +27,9 @@ and the sidebar by eye in VS Code.
 ```
 cd extension
 npm install                  # only if node_modules/ is missing
-npm test                     # 45 unit tests (engine, compile errors, problems/index/download), about 6 s
-npm run test:vscode          # 15 tests inside a real VS Code (judge + Problems sidebar)
+npm test                     # 52 unit tests (engine, compile errors, problems/index/download, filter, solved), about 6 s
+npm run test:vscode          # 17 tests inside a real VS Code (judge + Problems sidebar + filter/solved)
+npm run package              # builds dsa-drill-<version>.vsix (gitignored) with vsce
 npm run judge -- <solution>  # judge from the terminal
 npm run index                # rebuild ../index.json from ../problems/ (--check: fail if stale)
 ```
@@ -63,7 +64,9 @@ extension/
   src/problems/source.ts    parseRepo; GitHubSource (raw.githubusercontent, pinned to a commit); LocalSource
   src/problems/install.ts   installProblem (download/update), addSolution, scanLocal, isOutdated
   src/problems/starters.ts  built-in starter templates per language
-  src/problems/view.ts      Problems sidebar (TreeView) + open/refresh/update commands
+  src/problems/view.ts      Problems sidebar (TreeView) + open/refresh/update/filter/markUnsolved commands
+  src/problems/solved.ts    SolvedStore: globalState key dsaDrill.solved, { "<repo label>::<slug>": { languages, firstAt, hash } }
+  src/problems/filter.ts    ProblemFilter { tags (any of), hideSolved }, stored in globalState key dsaDrill.filter
   src/problems/buildIndexCli.ts  npm run index
   src/cli.ts                terminal front end (npm run judge)
   src/extension.ts          commands, CodeLens, status bar, Problems-panel errors, ".data next to file" detection
@@ -192,11 +195,31 @@ index. `memoryLimit` is stored but not used yet.
 - The old tool was moved to `legacy/`, not deleted (no git history yet to recover it from).
 - CI does not run the extension's unit tests (not yet tried on Linux).
 
+## Phase 5 so far (2026-11-22)
+
+- **Solved:** Run Tests marks a problem solved when every case is AC (NO_EXPECTED doesn't count) and the
+  folder has `.data/.source.json` (i.e. it was downloaded; plain local folders are ignored). Key is the
+  source label + slug, so `owner/repo@branch` counts separately from `owner/repo`. Synced via
+  `globalState.setKeysForSync`. First solve shows "Solved "X"! (n/m solved)". Solved stays solved after a
+  test update (the tooltip says the tests changed since).
+- **Sidebar:** ✓ `pass-filled` icon (outdated's cloud icon still wins), group description `solved/total`,
+  view description `n/m solved`, tooltip lists languages + first date. contextValue gets a `.solved` suffix;
+  package.json menu regexes were updated to `^problem\.(local|outdated)(\.solved)?$` etc.
+- **Filter:** title-bar filter button (multi-select quick pick: Hide solved + tags with counts). Tags match
+  if the problem has any checked tag. Active filter shows as the view's message; the button turns into
+  Clear Filter (context key `dsaDrill.filterActive`). `dsaDrill.filterProblems` also takes a filter object
+  (used by the tests). Open Problem quick pick marks solved problems too.
+- **Packaging:** version 0.1.0, extension/README.md (Marketplace page), CHANGELOG.md, LICENSE (MIT,
+  also at repo root), repository/homepage/bugs, `.vscodeignore`, `@vscode/vsce` dev dependency.
+  `npm run package` gives a 47 KB `.vsix` (27 files); it installs into a clean VS Code.
+- The publisher id is still the placeholder `dsa-drill`; the Marketplace needs a real publisher.
+
 ## Next steps
 
-1. Check the first CI run under the repo's **Actions** tab. If it fails, the likely spots are `npm ci`
-   (lock file) or the Linux paths in `authoring/`.
-2. Look at the sidebar by eye: install the extension (F5, or a `.vsix`) with `dsaDrill.repo` left at its default.
-3. Back up `references/` somewhere outside the repo (it is gitignored, and it is the only copy of the refs).
-4. Delete `legacy/` once it's no longer wanted.
-5. Phase 5: solved tracking, tags/filter, Marketplace publish.
+1. Decide Marketplace vs `.vsix`. Marketplace: create a publisher at
+   https://marketplace.visualstudio.com/manage, set `publisher` in extension/package.json to its id, add a
+   128x128 PNG `icon`, then `npx vsce login <publisher>` and `npx vsce publish`.
+   `.vsix` only: attach `dsa-drill-0.1.0.vsix` to a GitHub release and share the link.
+2. Check the first CI run under the repo's **Actions** tab.
+3. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
+4. Back up `references/`; delete `legacy/` when no longer wanted.

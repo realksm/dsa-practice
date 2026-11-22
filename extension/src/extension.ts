@@ -3,6 +3,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { parseCompileErrors, sameFile } from "./diagnostics";
 import { CaseResult, DATA_DIR, judge, JudgeReport, languageOf, runOnInput, ToolPaths } from "./judge";
+import { readSourceInfo } from "./problems/install";
+import { SOLVED_KEY, SolvedStore } from "./problems/solved";
 import { registerProblems } from "./problems/view";
 import { emptyState, ResultsPanel } from "./ui/resultsPanel";
 
@@ -27,6 +29,23 @@ export function activate(ctx: vscode.ExtensionContext) {
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   status.command = "dsaDrill.showResults";
   ctx.subscriptions.push(diagnostics, status);
+
+  const solved = new SolvedStore(ctx.globalState);
+  ctx.globalState.setKeysForSync([SOLVED_KEY]); // solved problems follow the user via Settings Sync
+  const problems = registerProblems(ctx, solved);
+
+  /** All tests passed: if this problem came from the repo, remember it as solved. */
+  async function recordSolve(file: string) {
+    const info = await readSourceInfo(path.dirname(file));
+    const language = languageOf(file);
+    if (!info?.repo || !info.slug || !language) return; // a local folder, not a downloaded problem
+    const first = await solved.mark(info.repo, info.slug, language, info.hash);
+    if (first) {
+      const title = problems.index?.problems.find((p) => p.slug === info.slug)?.title ?? info.slug;
+      const n = problems.solvedSummary();
+      vscode.window.showInformationMessage(`Solved "${title}"!${n ? ` (${n})` : ""}`);
+    }
+  }
 
   let lastFile: string | undefined;
   let running: AbortController | undefined;
@@ -121,6 +140,9 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (cancelled) setStatus(`$(debug-stop) ${report.passed}/${report.total}`, "Stopped");
         else if (failed) setStatus(`$(error) ${report.passed}/${report.total} passed`, "Click to see which cases failed", "bad");
         else setStatus(`$(pass) ${report.passed}/${report.total} passed`, "All tests passed", "ok");
+        if (!cancelled && report.total > 0 && report.passed === report.total) {
+          await recordSolve(file).catch((e) => console.error("DSA Drill: couldn't record the solve:", e));
+        }
       }
       return report;
     } catch (e) {
@@ -194,10 +216,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   updateContext(vscode.window.activeTextEditor);
   ctx.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateContext));
 
-  const problems = registerProblems(ctx);
-
   // for the VS Code tests only
-  return { _test: { rendered: () => panel.lastRendered, problems: () => problems.snapshot() } };
+  return { _test: { rendered: () => panel.lastRendered, problems: () => problems.snapshot(), filter: () => problems.filter } };
 }
 
 export function deactivate() {}

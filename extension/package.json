@@ -2,9 +2,26 @@
   "name": "dsa-drill",
   "displayName": "DSA Drill",
   "description": "Practice data structures and algorithms problems and run their tests inside VS Code.",
-  "version": "0.0.1",
+  "keywords": [
+    "dsa",
+    "algorithms",
+    "competitive programming",
+    "practice",
+    "judge",
+    "leetcode"
+  ],
+  "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realksm/dsa-practice.git",
+    "directory": "extension"
+  },
+  "homepage": "https://github.com/realksm/dsa-practice#readme",
+  "bugs": {
+    "url": "https://github.com/realksm/dsa-practice/issues"
+  },
   "publisher": "dsa-drill",
   "engines": {
     "vscode": "^1.90.0",
@@ -72,6 +89,23 @@
         "command": "dsaDrill.updateAllProblems",
         "title": "Update Tests of All Downloaded Problems",
         "category": "DSA Drill"
+      },
+      {
+        "command": "dsaDrill.filterProblems",
+        "title": "Filter Problems…",
+        "category": "DSA Drill",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "dsaDrill.clearFilter",
+        "title": "Clear Filter",
+        "category": "DSA Drill",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "dsaDrill.markUnsolved",
+        "title": "Mark as Unsolved",
+        "category": "DSA Drill"
       }
     ],
     "viewsContainers": {
@@ -94,15 +128,25 @@
     "menus": {
       "view/title": [
         {
+          "command": "dsaDrill.filterProblems",
+          "when": "view == dsaDrill.problems && !dsaDrill.filterActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dsaDrill.clearFilter",
+          "when": "view == dsaDrill.problems && dsaDrill.filterActive",
+          "group": "navigation@1"
+        },
+        {
           "command": "dsaDrill.refreshProblems",
           "when": "view == dsaDrill.problems",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
           "command": "dsaDrill.updateProblem",
-          "when": "view == dsaDrill.problems && viewItem == problem.outdated",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.outdated(\\.solved)?$/",
           "group": "inline"
         },
         {
@@ -112,8 +156,13 @@
         },
         {
           "command": "dsaDrill.updateProblem",
-          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.(local|outdated)$/",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.(local|outdated)(\\.solved)?$/",
           "group": "2_update"
+        },
+        {
+          "command": "dsaDrill.markUnsolved",
+          "when": "view == dsaDrill.problems && viewItem =~ /\\.solved$/",
+          "group": "3_solved"
         }
       ],
       "editor/title/run": [
@@ -144,6 +193,14 @@
         {
           "command": "dsaDrill.updateProblem",
           "when": "false"
+        },
+        {
+          "command": "dsaDrill.clearFilter",
+          "when": "dsaDrill.filterActive"
+        },
+        {
+          "command": "dsaDrill.markUnsolved",
+          "when": "false"
         }
       ]
     },
@@ -171,8 +228,18 @@
         "dsaDrill.defaultLanguage": {
           "type": "string",
           "default": "",
-          "enum": ["", "cpp", "java", "python"],
-          "enumItemLabels": ["Ask each time", "C++", "Java", "Python"],
+          "enum": [
+            "",
+            "cpp",
+            "java",
+            "python"
+          ],
+          "enumItemLabels": [
+            "Ask each time",
+            "C++",
+            "Java",
+            "Python"
+          ],
           "description": "Language for newly opened problems. Empty = ask each time."
         },
         "dsaDrill.compilers.cpp": {
@@ -222,12 +289,14 @@
     "test:vscode": "tsc -p . && node out/test/vscode/run.js",
     "judge": "node out/src/cli.js",
     "index": "tsc -p . && node out/src/problems/buildIndexCli.js",
-    "compile:authoring": "tsc -p ../authoring"
+    "compile:authoring": "tsc -p ../authoring",
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/vscode": "^1.90.0",
     "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^7.0.2"
   }
 }

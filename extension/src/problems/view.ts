@@ -1,10 +1,12 @@
-/** The Problems sidebar and its commands: open (download + starter), refresh, update tests. */
+/** The Problems sidebar and its commands: open (download + starter), refresh, update tests, filter, solved. */
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageId, LANGUAGES } from "../judge/languages";
+import { applyFilter, describeFilter, FILTER_KEY, isFilterActive, NO_FILTER, normaliseFilter, ProblemFilter, tagCounts } from "./filter";
 import { IndexEntry, ProblemIndex } from "./indexFile";
 import { addSolution, InstallResult, installProblem, isOutdated, LocalProblem, scanLocal } from "./install";
+import { SolvedRecord, SolvedStore, StateStore } from "./solved";
 import { DEFAULT_REPO, ProblemSource, sourceFor } from "./source";
 
 const DIFFICULTY_ORDER = ["easy", "medium", "hard"];
@@ -40,9 +42,39 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
   private loadedOnce = false;
   /** Hashes we already told the user about, so a refresh doesn't nag twice. */
   private notified = new Set<string>();
+  filter: ProblemFilter;
+
+  constructor(
+    readonly solved: SolvedStore,
+    private readonly state: StateStore,
+  ) {
+    this.filter = normaliseFilter(state.get(FILTER_KEY, NO_FILTER));
+  }
 
   dispose() {
     this.changed.dispose();
+  }
+
+  refresh() {
+    this.changed.fire(undefined);
+  }
+
+  solvedRecord(slug: string): SolvedRecord | undefined {
+    return this.source ? this.solved.get(this.source.label, slug) : undefined;
+  }
+
+  isSolved = (slug: string) => !!this.solvedRecord(slug);
+
+  async setFilter(f: ProblemFilter) {
+    this.filter = normaliseFilter(f);
+    await this.state.update(FILTER_KEY, this.filter);
+    this.refresh();
+  }
+
+  /** "1/2 solved", for the view title. */
+  solvedSummary(): string | undefined {
+    const all = this.index?.problems ?? [];
+    return all.length ? `${all.filter((e) => this.isSolved(e.slug)).length}/${all.length} solved` : undefined;
   }
 
   /** Fetch the index (again). Concurrent calls share one fetch. */
@@ -121,8 +153,12 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
       }
       const problems = this.index?.problems ?? [];
       if (!problems.length) return [{ kind: "message", text: `No problems in ${this.source?.label} yet.`, icon: "info" }];
+      const shown = applyFilter(problems, this.filter, this.isSolved);
+      if (!shown.length) {
+        return [{ kind: "message", text: "No problems match the filter.", icon: "filter", command: { title: "Clear Filter", command: "dsaDrill.clearFilter" } }];
+      }
       const groups = new Map<string, IndexEntry[]>();
-      for (const p of problems) {
+      for (const p of shown) {
         const d = p.difficulty || "unrated";
         groups.set(d, [...(groups.get(d) ?? []), p]);
       }
@@ -145,21 +181,31 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
     if (node.kind === "group") {
       const item = new vscode.TreeItem(cap(node.name), vscode.TreeItemCollapsibleState.Expanded);
       item.id = "group:" + node.name;
-      item.description = String(node.entries.length);
+      const solved = node.entries.filter((e) => this.isSolved(e.slug)).length;
+      item.description = solved ? `${solved}/${node.entries.length}` : String(node.entries.length);
       return item;
     }
     const e = node.entry;
     const local = this.local.get(e.slug);
     const outdated = isOutdated(e, local);
+    const solved = this.solvedRecord(e.slug);
     const item = new vscode.TreeItem(e.title);
     item.id = "problem:" + e.slug;
     item.description = [...(e.tags ?? []), ...(outdated ? ["tests updated"] : [])].join(" · ");
     item.iconPath = outdated
       ? new vscode.ThemeIcon("cloud-download", new vscode.ThemeColor("notificationsInfoIcon.foreground"))
-      : new vscode.ThemeIcon(local ? "file-code" : "circle-large-outline");
-    item.contextValue = outdated ? "problem.outdated" : local ? "problem.local" : "problem";
+      : solved
+        ? new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
+        : new vscode.ThemeIcon(local ? "file-code" : "circle-large-outline");
+    // contextValue is "problem", "problem.local" or "problem.outdated", plus ".solved" (see package.json menus)
+    item.contextValue = (outdated ? "problem.outdated" : local ? "problem.local" : "problem") + (solved ? ".solved" : "");
     const tip = new vscode.MarkdownString(`**${e.title}**  \n${cap(e.difficulty || "unrated")}${e.tags?.length ? " · " + e.tags.join(", ") : ""}`);
     tip.appendMarkdown(`  \n${e.files.filter((f) => f.endsWith(".in")).length} tests`);
+    if (solved) {
+      const langs = solved.languages.map((l) => LANGUAGES[l]?.name ?? l).join(", ");
+      tip.appendMarkdown(`  \n✓ Solved in ${langs} (first on ${solved.firstAt.slice(0, 10)})`);
+      if (solved.hash && solved.hash !== e.hash) tip.appendMarkdown(" — the tests have changed since");
+    }
     if (local) tip.appendMarkdown(`  \nDownloaded to \`${local.dir}\``);
     if (outdated) tip.appendMarkdown("  \nThe tests changed since you downloaded them.");
     item.tooltip = tip;
@@ -168,13 +214,40 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
   }
 
   /** For the VS Code tests: what the tree shows, flattened. */
-  snapshot(): ({ slug: string; group: string; local: boolean; outdated: boolean } | { message: string })[] {
-    return this.getChildren().flatMap((g): ({ slug: string; group: string; local: boolean; outdated: boolean } | { message: string })[] =>
+  snapshot(): (SnapshotRow | { message: string })[] {
+    return this.getChildren().flatMap((g): (SnapshotRow | { message: string })[] =>
       g.kind === "group"
-        ? g.entries.map((e) => ({ slug: e.slug, group: g.name, local: this.local.has(e.slug), outdated: isOutdated(e, this.local.get(e.slug)) }))
+        ? g.entries.map((e) => ({
+            slug: e.slug,
+            group: g.name,
+            local: this.local.has(e.slug),
+            outdated: isOutdated(e, this.local.get(e.slug)),
+            solved: this.isSolved(e.slug),
+          }))
         : [{ message: g.kind === "message" ? g.text : "" }],
     );
   }
+}
+
+type SnapshotRow = { slug: string; group: string; local: boolean; outdated: boolean; solved: boolean };
+
+/** Ask which tags to show and whether to hide solved problems. Undefined = cancelled. */
+async function pickFilter(index: ProblemIndex, current: ProblemFilter): Promise<ProblemFilter | undefined> {
+  type Item = vscode.QuickPickItem & { tag?: string; hideSolved?: boolean };
+  const hide: Item = { label: "$(pass-filled) Hide solved problems", hideSolved: true, picked: current.hideSolved };
+  const tags = tagCounts(index.problems);
+  const items: Item[] = [
+    hide,
+    { label: "Tags: show problems with any of the checked tags", kind: vscode.QuickPickItemKind.Separator },
+    ...tags.map((t) => ({ label: t.tag, description: `${t.count} problem${t.count === 1 ? "" : "s"}`, tag: t.tag, picked: current.tags.includes(t.tag) })),
+  ];
+  const picked = await vscode.window.showQuickPick(items, {
+    canPickMany: true,
+    title: "Filter Problems",
+    placeHolder: tags.length ? "Check tags to narrow the list. Nothing checked shows everything." : "No problem has tags yet.",
+  });
+  if (!picked) return undefined;
+  return { tags: picked.flatMap((p) => (p.tag ? [p.tag] : [])), hideSolved: picked.some((p) => p.hideSolved) };
 }
 
 function slugOf(arg: unknown): string | undefined {
@@ -183,16 +256,28 @@ function slugOf(arg: unknown): string | undefined {
   return n?.kind === "problem" ? n.entry.slug : undefined;
 }
 
-export function registerProblems(ctx: vscode.ExtensionContext) {
-  const provider = new ProblemsProvider();
+export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedStore) {
+  const provider = new ProblemsProvider(solved, ctx.globalState);
   const view = vscode.window.createTreeView("dsaDrill.problems", { treeDataProvider: provider, showCollapseAll: true });
+
+  /** The view's title count, filter line and the context key that swaps the filter buttons. */
+  const updateChrome = () => {
+    view.description = provider.solvedSummary();
+    view.message = describeFilter(provider.filter);
+    void vscode.commands.executeCommand("setContext", "dsaDrill.filterActive", isFilterActive(provider.filter));
+  };
+  updateChrome();
 
   async function entryFor(arg: unknown): Promise<IndexEntry | undefined> {
     const index = await provider.ensureLoaded();
     let slug = slugOf(arg);
     if (!slug) {
       const pick = await vscode.window.showQuickPick(
-        index.problems.map((p) => ({ label: p.title, description: [cap(p.difficulty || "unrated"), ...(p.tags ?? [])].join(" · "), slug: p.slug })),
+        index.problems.map((p) => ({
+          label: (provider.isSolved(p.slug) ? "$(pass-filled) " : "") + p.title,
+          description: [cap(p.difficulty || "unrated"), ...(p.tags ?? []), ...(provider.isSolved(p.slug) ? ["solved"] : [])].join(" · "),
+          slug: p.slug,
+        })),
         { placeHolder: "Open which problem?", matchOnDescription: true },
       );
       slug = pick?.slug;
@@ -295,7 +380,26 @@ export function registerProblems(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(
     provider,
     view,
+    provider.onDidChangeTreeData(updateChrome),
+    solved.onDidChange(() => provider.refresh()),
     vscode.commands.registerCommand("dsaDrill.refreshProblems", () => provider.load({ notify: true })),
+    vscode.commands.registerCommand(
+      "dsaDrill.filterProblems",
+      guard(async (f?: ProblemFilter) => {
+        const index = await provider.ensureLoaded();
+        const next = f ?? (await pickFilter(index, provider.filter));
+        if (next) await provider.setFilter(next);
+        return provider.filter;
+      }),
+    ),
+    vscode.commands.registerCommand("dsaDrill.clearFilter", () => provider.setFilter(NO_FILTER)),
+    vscode.commands.registerCommand(
+      "dsaDrill.markUnsolved",
+      guard(async (arg?: unknown) => {
+        const entry = await entryFor(arg);
+        if (entry && provider.source) await solved.unmark(provider.source.label, entry.slug);
+      }),
+    ),
     vscode.commands.registerCommand(
       "dsaDrill.openProblem",
       guard((arg?: unknown, language?: LanguageId) => openProblem(arg, language)),
