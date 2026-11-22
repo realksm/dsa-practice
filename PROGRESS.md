@@ -14,7 +14,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 2. Local VS Code extension | ✅ Done |
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
-| 5. Polish (solved tracking, tags, publish) | 🟡 Solved tracking + filter done, `.vsix` packaged (2026-11-22); Marketplace not done |
+| 5. Polish (solved tracking, tags, publish) | ✅ Done 2026-11-22: solved tracking, filter, `.vsix` released as v0.1.0 on GitHub (Marketplace: not planned for now) |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -214,12 +214,18 @@ index. `memoryLimit` is stored but not used yet.
   `npm run package` gives a 47 KB `.vsix` (27 files); it installs into a clean VS Code.
 - The publisher id is still the placeholder `dsa-drill`; the Marketplace needs a real publisher.
 
+## Releases
+
+- **v0.1.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.1.0, with
+  `dsa-drill-0.1.0.vsix` attached (SHA-256 5d43bf0e...070fcf). CI (`check`) green on every push so far.
+- New release: bump `version` in extension/package.json + CHANGELOG.md, `npm run package` in extension/,
+  commit, `git tag -a vX.Y.Z`, push with the tag, then
+  `gh release create vX.Y.Z extension/dsa-drill-X.Y.Z.vsix --notes-file <notes>` (gh is installed and logged in).
+
 ## Next steps
 
-1. Decide Marketplace vs `.vsix`. Marketplace: create a publisher at
-   https://marketplace.visualstudio.com/manage, set `publisher` in extension/package.json to its id, add a
-   128x128 PNG `icon`, then `npx vsce login <publisher>` and `npx vsce publish`.
-   `.vsix` only: attach `dsa-drill-0.1.0.vsix` to a GitHub release and share the link.
-2. Check the first CI run under the repo's **Actions** tab.
-3. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
-4. Back up `references/`; delete `legacy/` when no longer wanted.
+1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
+2. Back up `references/`; delete `legacy/` when no longer wanted.
+3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
+   `npx vsce login` + `npx vsce publish`).
+4. More problems: `npm run new <slug>`, `npm run build -- --stress`, commit, push.
