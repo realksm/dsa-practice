@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-22)
 
 - Memory limit: `memoryLimit` in meta.json is now enforced, with a new MLE verdict. Peak memory shows
   per test in the results panel, in Custom Input and in the run history. Measured by a small helper
