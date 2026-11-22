@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-22)
 
 - Stress Test: compare your solution with a brute force on random inputs from a generator; the first
   failing input is saved as a test. Templates for `gen` and `brute` are offered.

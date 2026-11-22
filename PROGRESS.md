@@ -15,7 +15,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
 | 5. Polish (solved tracking, tags, publish) | ✅ Done 2026-11-22: solved tracking, filter, `.vsix` released as v0.1.0 on GitHub (Marketplace: not planned for now) |
-| 6. Quick wins + stress test + run history | ✅ Done 2026-11-22 (not committed or released yet; CHANGELOG has it under "Unreleased") |
+| 6. Quick wins + stress test + run history | ✅ Done 2026-11-22, committed (90670ea); version 0.2.0 packaged, not pushed or released yet |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -263,8 +263,10 @@ index. `memoryLimit` is stored but not used yet.
 
 ## Next steps
 
-0. Commit phase 6, try Stress Test and the history by hand (F5), then release 0.2.0 (bump version,
-   move the CHANGELOG "Unreleased" section under 0.2.0).
+0. Phase 6 is committed and 0.2.0 is bumped and packaged (`dsa-drill-0.2.0.vsix`, SHA-256 3d5a29ec...c097858;
+   all 68 unit + 20 VS Code tests passed). Still to do: try Stress Test and the history by hand (F5),
+   then tag v0.2.0, push, and `gh release create`. The stray `max-subarray/` and `two-sum/` at the repo root
+   are downloaded copies from the GitHub check, not part of the repo.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
