@@ -88,7 +88,7 @@ git push                   users see it on next refresh
 3. ✅ **Problems repo**: index.json, sidebar, download + starter, refresh/update.
    Done: `extension/src/problems/`, `npm run index`. Tested against a local fixture repo.
 4. ✅ **Authoring scripts + CI check**; port max-subarray and two-sum as the first problems.
-   Done: `authoring/`, `npm run new|build|check`, `.github/workflows/check.yml`. Not pushed yet.
+   Done: `authoring/`, `npm run new|build|check`, `.github/workflows/check.yml`. Pushed 2026-11-22.
 5. **Polish**: solved tracking, tags/filter, Marketplace publish.
 
 Phases 1–2 already replace judge.py for local use.

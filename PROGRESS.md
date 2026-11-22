@@ -13,11 +13,14 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 1. Judge engine in TypeScript | ✅ Done |
 | 2. Local VS Code extension | ✅ Done |
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
-| 4. Authoring scripts + CI, port existing problems | 🟡 Steps 1–4 done 2026-11-22; step 5 (git init + push) left |
+| 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
 | 5. Polish (solved tracking, tags, publish) | Not started |
 
-The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`). On 2026-11-22
-`index.json` there gave a 404 because nothing had been pushed yet.
+The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
+Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
+index.json loads with both problems, both download (tests land in `.data/`, with `.data/.source.json`),
+and the judge runs on the downloaded copy. Not yet checked: the CI run result (GitHub API was rate-limited)
+and the sidebar by eye in VS Code.
 
 ## How to pick up again
 
@@ -191,8 +194,9 @@ index. `memoryLimit` is stored but not used yet.
 
 ## Next steps
 
-1. `git init`, commit (check `git status` shows no `references/` or `legacy/`), push to
-   `realksm/dsa-practice` (public), then check the CI run and the sidebar against the real repo.
-2. Back up `references/` somewhere outside the repo.
-3. Delete `legacy/` once it's no longer wanted.
-4. Phase 5: solved tracking, tags/filter, Marketplace publish.
+1. Check the first CI run under the repo's **Actions** tab. If it fails, the likely spots are `npm ci`
+   (lock file) or the Linux paths in `authoring/`.
+2. Look at the sidebar by eye: install the extension (F5, or a `.vsix`) with `dsaDrill.repo` left at its default.
+3. Back up `references/` somewhere outside the repo (it is gitignored, and it is the only copy of the refs).
+4. Delete `legacy/` once it's no longer wanted.
+5. Phase 5: solved tracking, tags/filter, Marketplace publish.
