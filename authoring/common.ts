@@ -99,5 +99,14 @@ export function validateMeta(meta: ProblemMeta): string[] {
   for (const k of ["exact", "ignoreCase"] as const) {
     if (meta[k] !== undefined && typeof meta[k] !== "boolean") errors.push(`${k} must be true or false`);
   }
+  const tm = meta.timeMultipliers as unknown;
+  if (tm !== undefined) {
+    if (typeof tm !== "object" || tm === null || Array.isArray(tm)) errors.push('timeMultipliers must be an object like { "java": 2 }');
+    else
+      for (const [lang, f] of Object.entries(tm)) {
+        if (!["cpp", "java", "python"].includes(lang)) errors.push(`timeMultipliers: unknown language "${lang}" (cpp, java or python)`);
+        else if (!(typeof f === "number" && f > 0 && f <= 10)) errors.push(`timeMultipliers.${lang} must be a number between 0 and 10`);
+      }
+  }
   return errors;
 }

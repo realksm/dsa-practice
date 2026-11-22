@@ -18,17 +18,28 @@ Programs read standard input and print to standard output, as on Codeforces or A
 - **Results panel:** PASS / WA / TLE / RE for every test, with time. A failing test shows its input,
   the expected output, your output and the first line that differs.
 - **Run Custom Input:** run your program on input you type, without comparing.
-- **Compile errors** go to the Problems panel, on the right line.
+- **Compile errors and warnings** go to the Problems panel, on the right line. When a Python or Java
+  solution crashes, the line it crashed on is marked too.
+- **Stress Test:** put a generator (`gen.py`, prints a random input for the seed in `argv[1]`) and a
+  slow but surely correct `brute.*` next to your solution; Stress Test runs both on seeds 1..200 and
+  stops at the first input where your solution disagrees, crashes or is too slow. That input is saved
+  as `.data/stress-<seed>.in` / `.out`, so Run Tests checks it from then on. It offers to create both
+  helper files from templates.
+- **Run history:** every Run Tests of a downloaded problem is kept (verdict, slowest case, language).
+  The sidebar shows your best time; right-click → **Show Run History** lists recent runs.
+- **Fast reruns:** a file is compiled once until you change it, across Run Tests, Custom Input and Stress Test.
 - **Solved tracking:** a problem is marked ✓ once every test passes. Counts show in the sidebar,
   and your solved list follows you through Settings Sync. Right-click → **Mark as Unsolved** to reset one.
 - **Filter:** the filter button in the sidebar narrows the list by tag or hides solved problems.
 - **Test updates:** when a problem's tests change, the sidebar marks it, and **Update Tests** fetches
-  the new ones without touching your solution.
+  the new ones without touching your solution. Test files you added to `.data/` yourself are kept.
 
 ## Judging rules
 
 - Output is compared token by token. Integers must match exactly; decimals are accepted within 1e-6.
-- Each problem has a time limit per test (in its `meta.json`). Java and Python get the same limit as C++.
+- Each problem has a time limit per test (in its `meta.json`), set for C++. Java gets twice that by
+  default (JVM startup); Python gets the same. A problem can change this with `timeMultipliers` in its
+  `meta.json`, and you can with the `dsaDrill.timeMultipliers` setting.
 - C++ is compiled with `-std=c++17 -O2`, with a 256 MB stack on Windows.
 
 ## Settings
@@ -41,5 +52,7 @@ Programs read standard input and print to standard output, as on Codeforces or A
 | `dsaDrill.compilers.cpp` / `javac` / `java` / `python` | Compiler or interpreter command or full path. |
 | `dsaDrill.codeLens` | Show the Run Tests links above solution files. |
 | `dsaDrill.customInputTimeLimit` | Seconds a Run Custom Input run may take. |
+| `dsaDrill.timeMultipliers` | Time limit factor per language, e.g. `{ "python": 3 }`. |
+| `dsaDrill.stressRuns` | How many random inputs Stress Test tries (default 200). |
 
 Problems and source: [github.com/realksm/dsa-practice](https://github.com/realksm/dsa-practice).

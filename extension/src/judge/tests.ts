@@ -21,6 +21,8 @@ export interface ProblemMeta {
   exact?: boolean;
   ignoreCase?: boolean;
   eps?: number;
+  /** Time limit factor per language, e.g. { "java": 3 }. Defaults: DEFAULT_TIME_MULTIPLIERS. */
+  timeMultipliers?: Partial<Record<"cpp" | "java" | "python", number>>;
 }
 
 export const DATA_DIR = ".data";

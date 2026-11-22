@@ -15,6 +15,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
 | 5. Polish (solved tracking, tags, publish) | ✅ Done 2026-11-22: solved tracking, filter, `.vsix` released as v0.1.0 on GitHub (Marketplace: not planned for now) |
+| 6. Quick wins + stress test + run history | ✅ Done 2026-11-22 (not committed or released yet; CHANGELOG has it under "Unreleased") |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -27,8 +28,8 @@ and the sidebar by eye in VS Code.
 ```
 cd extension
 npm install                  # only if node_modules/ is missing
-npm test                     # 52 unit tests (engine, compile errors, problems/index/download, filter, solved), about 6 s
-npm run test:vscode          # 17 tests inside a real VS Code (judge + Problems sidebar + filter/solved)
+npm test                     # 68 unit tests (engine, compile errors, problems/index/download, filter, solved, phase 6), about 7 s
+npm run test:vscode          # 20 tests inside a real VS Code (judge, sidebar, filter/solved, warnings, stress, history)
 npm run package              # builds dsa-drill-<version>.vsix (gitignored) with vsce
 npm run judge -- <solution>  # judge from the terminal
 npm run index                # rebuild ../index.json from ../problems/ (--check: fail if stale)
@@ -59,6 +60,8 @@ extension/
   src/judge/runner.ts       spawn with time limit, output cap, cancel; describeExit (0xC00000FD etc.)
   src/judge/languages.ts    cpp (g++ -O2, 256 MB stack on Windows), java (Main.java, -Xss256m), python
   src/judge/tests.ts        reads .data/NN.in + NN.out|.ans (natural order), meta.json
+  src/judge/cache.ts        ProgramCache: compiled programs per (path, compiler settings, source text), LRU of 8
+  src/judge/stress.ts       stressTest (gen seed -> brute vs solution), saveStressCase, helper templates
   src/judge/judge.ts        judge(): every case with live progress; runOnInput(): custom input
   src/problems/indexFile.ts index.json types, parseIndex (validates slugs and paths), buildIndex, hashFiles
   src/problems/source.ts    parseRepo; GitHubSource (raw.githubusercontent, pinned to a commit); LocalSource
@@ -66,6 +69,7 @@ extension/
   src/problems/starters.ts  built-in starter templates per language
   src/problems/view.ts      Problems sidebar (TreeView) + open/refresh/update/filter/markUnsolved commands
   src/problems/solved.ts    SolvedStore: globalState key dsaDrill.solved, { "<repo label>::<slug>": { languages, firstAt, hash } }
+  src/problems/history.ts   HistoryStore (runs per repo::slug, newest first, max 30), summariseRun, JsonFileStore
   src/problems/filter.ts    ProblemFilter { tags (any of), hideSolved }, stored in globalState key dsaDrill.filter
   src/problems/buildIndexCli.ts  npm run index
   src/cli.ts                terminal front end (npm run judge)
@@ -170,9 +174,9 @@ index. `memoryLimit` is stored but not used yet.
 
 ## Known gaps / ideas (not blocking)
 
-- Compiler warnings from a successful compile are dropped (only errors reach the Problems panel).
-- Python tracebacks aren't mapped to Problems-panel locations.
-- Every run compiles again; there's no cache between Run Tests and Run Custom Input.
+- The compile cache keys on the solution's own text only: a change to a local header it `#include`s
+  isn't noticed until the solution changes (or VS Code restarts).
+- C++ crashes (segfaults) aren't mapped to a line; only Python tracebacks and Java stack traces are.
 - Not checked by eye in light/dark themes yet; only checked that it renders. The sidebar hasn't been
   looked at by eye either (its contents are checked by the tests).
 - No proxy handling beyond what VS Code gives the global `fetch`.
@@ -214,6 +218,41 @@ index. `memoryLimit` is stored but not used yet.
   `npm run package` gives a 47 KB `.vsix` (27 files); it installs into a clean VS Code.
 - The publisher id is still the placeholder `dsa-drill`; the Marketplace needs a real publisher.
 
+## Phase 6 decisions (2026-11-22)
+
+- **Compile cache** (`ProgramCache`, in-memory for the session, dirs in the OS temp folder, removed on
+  deactivate). Key: lowercased path + compiler settings + file bytes. Failed compiles aren't kept
+  (installing a missing compiler doesn't change the key). judge/runOnInput/stressTest take `cache`;
+  the CLI and authoring scripts don't pass one and compile into a throwaway folder as before.
+- **Time factor:** `timeLimitFor()` = base (opts.timeLimitMs, else meta.timeLimit, else 2 s) × factor;
+  factor = setting > meta.json `timeMultipliers` > default (cpp 1, java 2, python 1). The report's
+  `timeLimitMs` is the effective one. validateMeta checks `timeMultipliers` (known language, 0-10).
+- **Warnings:** `prepare()` now returns `warnings` (compiler stderr+stdout on success); they're parsed with
+  the same g++/javac parser and shown as warnings. `showCompilerOutput` adds to a file's diagnostics.
+- **Runtime errors:** `parseRuntimeError` in diagnostics.ts. Python: last `File "<solution>", line N`
+  frame; message = last unindented line. Java: first `at ...(Main.java:N)` frame; message = the exception
+  line. Only the first RE case is marked, as "Case NN: <message>".
+- **User tests on update:** `.source.json` now has `files` (the .data files the download wrote). On
+  update, any other file in the old .data is copied into the new one, unless the new download has a
+  file with that name. Older downloads with no list: a file is kept if the new download doesn't have it
+  (so a test the repo deleted would survive once; the next update has the list).
+- **Stress test:** helpers are `gen.*` and `brute.*` (any language; Java `Gen.java`/`Brute.java`) next to
+  the solution; they get no CodeLens and aren't solution files. gen gets the seed as argv[1]; gen and
+  brute have 10 s each; the solution gets its normal (factored) limit. Outcomes: passed / cancelled /
+  missingHelpers / compileError / helperFailed (gen or brute crashed: their fault, not the solution's) /
+  found. A found case is written to `.data/stress-<seed>.in` + `.out` (brute's output) and shown in
+  the results panel with a note. Missing helpers: offer to create `gen.py` + `brute.<solution language>`.
+  Setting `dsaDrill.stressRuns` (default 200). Stop / the notification's Cancel abort it.
+- **History** is stored in `<globalStorage>/history.json`, **not** globalState. With both in globalState
+  a run (history write, then the solved write right after) lost a history entry once in the VS Code
+  tests; with its own file it passed 4 runs in a row. (The solved/filter keys still share globalState;
+  no loss seen there, but worth knowing.) Only downloaded problems are recorded, like solved. CE counts
+  as a run; cancelled runs and runs with only no-answer cases don't. Best = fastest AC by slowest case,
+  preferring runs on the current test hash. Shown as "<n> ms" in the sidebar description + tooltip;
+  right-click → Show Run History (quick pick).
+- Results panel state has a `note` line (used by the stress test).
+- `memento()` test helper moved to test/helpers.ts.
+
 ## Releases
 
 - **v0.1.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.1.0, with
@@ -224,6 +263,8 @@ index. `memoryLimit` is stored but not used yet.
 
 ## Next steps
 
+0. Commit phase 6, try Stress Test and the history by hand (F5), then release 0.2.0 (bump version,
+   move the CHANGELOG "Unreleased" section under 0.2.0).
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,

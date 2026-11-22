@@ -32,7 +32,7 @@ it(".data is hidden and the default excludes are kept", async () => {
 it("shows Run Tests CodeLens on solution files only", async () => {
   const doc = await open("max-subarray/solution.cpp");
   const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", doc.uri);
-  assert.deepEqual(lenses.map((l) => l.command?.title), ["▶ Run Tests", "Run Custom Input"]);
+  assert.deepEqual(lenses.map((l) => l.command?.title), ["▶ Run Tests", "Run Custom Input", "Stress Test"]);
   const md = await open("max-subarray/problem.md");
   const none = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", md.uri);
   assert.equal(none.length, 0);
@@ -183,6 +183,66 @@ it("the filter hides solved problems and narrows by tag", async () => {
 it("Mark as Unsolved clears the solved state", async () => {
   await vscode.commands.executeCommand("dsaDrill.markUnsolved", "add-two");
   assert.equal(rows()[0].solved, false);
+});
+
+it("compiler warnings and runtime crash lines go to the Problems panel", async () => {
+  const dir = path.join(ws(), "warn");
+  await fs.mkdir(path.join(dir, ".data"), { recursive: true });
+  await fs.writeFile(path.join(dir, ".data", "1.in"), "0\n");
+  await fs.writeFile(path.join(dir, ".data", "1.out"), "0\n");
+  await fs.writeFile(path.join(dir, "solution.cpp"), "#include <cstdio>\nint main() {\n  int unused;\n  printf(\"0\\n\");\n}\n");
+  const doc = await open("warn/solution.cpp");
+  const r = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", doc.uri);
+  assert.equal(r.passed, 1);
+  const warn = vscode.languages.getDiagnostics(doc.uri).filter((d) => d.source === "dsa-drill");
+  assert.ok(warn.some((d) => d.severity === vscode.DiagnosticSeverity.Warning && d.range.start.line === 2), JSON.stringify(warn));
+
+  await fs.writeFile(path.join(dir, "solution.py"), "n = int(input())\nprint(5 // n)\n");
+  const py = await open("warn/solution.py");
+  const pr = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", py.uri);
+  assert.equal(pr.cases[0].verdict, "RE");
+  const crash = vscode.languages.getDiagnostics(py.uri).filter((d) => d.source === "dsa-drill");
+  assert.equal(crash.length, 1, JSON.stringify(crash));
+  assert.equal(crash[0].range.start.line, 1);
+  assert.match(crash[0].message, /^Case 1: ZeroDivisionError/);
+});
+
+it("stress test finds a wrong answer, saves it as a test and shows it", async () => {
+  const dir = path.join(ws(), "stress");
+  await fs.mkdir(path.join(dir, ".data"), { recursive: true });
+  await fs.writeFile(path.join(dir, "gen.py"), "import random, sys\nrandom.seed(int(sys.argv[1]))\nprint(random.randint(-9, 9))\n");
+  await fs.writeFile(path.join(dir, "brute.py"), "print(int(input()) * 2)\n");
+  await fs.writeFile(path.join(dir, "solution.py"), "print(abs(int(input())) * 2)\n");
+  const gen = await open("stress/gen.py");
+  const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", gen.uri);
+  assert.equal(lenses.length, 0, "no Run Tests on the helpers");
+
+  const doc = await open("stress/solution.py");
+  const o = await vscode.commands.executeCommand<{ kind: string; seed: number; result: CaseResult }>("dsaDrill.stressTest", doc.uri);
+  assert.equal(o.kind, "found", JSON.stringify(o));
+  assert.equal(o.result.verdict, "WA");
+  const saved = await read(`stress/.data/stress-${o.seed}.in`);
+  assert.equal(saved, o.result.input);
+  assert.ok(Number(await read(`stress/.data/stress-${o.seed}.out`)) < 0);
+
+  // fixed: the saved case now passes in Run Tests, and the stress test finds nothing
+  await fs.writeFile(path.join(dir, "solution.py"), "print(int(input()) * 2)\n");
+  const report = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", doc.uri);
+  assert.ok(report.cases.some((c) => c.name === `stress-${o.seed}` && c.verdict === "AC"));
+  await vscode.workspace.getConfiguration("dsaDrill").update("stressRuns", 20, vscode.ConfigurationTarget.Global);
+  const again = await vscode.commands.executeCommand<{ kind: string; runs: number }>("dsaDrill.stressTest", doc.uri);
+  assert.deepEqual(again, { kind: "passed", runs: 20 });
+  await vscode.workspace.getConfiguration("dsaDrill").update("stressRuns", undefined, vscode.ConfigurationTarget.Global);
+});
+
+it("run history records each Run Tests of a downloaded problem", async () => {
+  const api = vscode.extensions.all.find((e) => e.packageJSON.name === "dsa-drill")!.exports._test;
+  const runs = await vscode.commands.executeCommand<{ verdict: string; passed: number; total: number; language: string }[]>("dsaDrill.showHistory", "add-two");
+  // add-two ran three times above: 2/2 AC, then (after the test update) 3/3 AC ... newest first
+  assert.ok(runs.length >= 2, JSON.stringify(runs));
+  assert.deepEqual({ ...runs[0], at: undefined, maxTimeMs: undefined, hash: undefined }, { verdict: "AC", passed: 3, total: 3, language: "python", at: undefined, maxTimeMs: undefined, hash: undefined });
+  assert.ok(api.history.runs(JSON.parse(await read("max-pair/.data/.source.json")).repo, "max-pair").some((r: { verdict: string }) => r.verdict === "WA"));
+  await vscode.commands.executeCommand("workbench.action.closeQuickOpen");
 });
 
 it("a bad repo setting shows a message in the sidebar instead of failing", async () => {

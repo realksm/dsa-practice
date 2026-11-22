@@ -6,6 +6,7 @@ import { LanguageId, LANGUAGES } from "../judge/languages";
 import { applyFilter, describeFilter, FILTER_KEY, isFilterActive, NO_FILTER, normaliseFilter, ProblemFilter, tagCounts } from "./filter";
 import { IndexEntry, ProblemIndex } from "./indexFile";
 import { addSolution, InstallResult, installProblem, isOutdated, LocalProblem, scanLocal } from "./install";
+import { describeRun, HistoryStore } from "./history";
 import { SolvedRecord, SolvedStore, StateStore } from "./solved";
 import { DEFAULT_REPO, ProblemSource, sourceFor } from "./source";
 
@@ -47,6 +48,7 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
   constructor(
     readonly solved: SolvedStore,
     private readonly state: StateStore,
+    readonly history?: HistoryStore,
   ) {
     this.filter = normaliseFilter(state.get(FILTER_KEY, NO_FILTER));
   }
@@ -191,7 +193,9 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
     const solved = this.solvedRecord(e.slug);
     const item = new vscode.TreeItem(e.title);
     item.id = "problem:" + e.slug;
-    item.description = [...(e.tags ?? []), ...(outdated ? ["tests updated"] : [])].join(" · ");
+    const best = this.source && this.history?.best(this.source.label, e.slug, e.hash);
+    const runs = this.source && this.history ? this.history.runs(this.source.label, e.slug) : [];
+    item.description = [...(e.tags ?? []), ...(best ? [`${best.maxTimeMs} ms`] : []), ...(outdated ? ["tests updated"] : [])].join(" · ");
     item.iconPath = outdated
       ? new vscode.ThemeIcon("cloud-download", new vscode.ThemeColor("notificationsInfoIcon.foreground"))
       : solved
@@ -206,6 +210,8 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
       tip.appendMarkdown(`  \n✓ Solved in ${langs} (first on ${solved.firstAt.slice(0, 10)})`);
       if (solved.hash && solved.hash !== e.hash) tip.appendMarkdown(" — the tests have changed since");
     }
+    if (best) tip.appendMarkdown(`  \nBest: ${best.maxTimeMs} ms slowest case (${LANGUAGES[best.language]?.name ?? best.language}, ${best.at.slice(0, 10)})`);
+    if (runs[0]) tip.appendMarkdown(`  \nLast run: ${describeRun(runs[0])} (${runs[0].at.slice(0, 10)}) · ${runs.length} run${runs.length === 1 ? "" : "s"} kept`);
     if (local) tip.appendMarkdown(`  \nDownloaded to \`${local.dir}\``);
     if (outdated) tip.appendMarkdown("  \nThe tests changed since you downloaded them.");
     item.tooltip = tip;
@@ -256,8 +262,8 @@ function slugOf(arg: unknown): string | undefined {
   return n?.kind === "problem" ? n.entry.slug : undefined;
 }
 
-export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedStore) {
-  const provider = new ProblemsProvider(solved, ctx.globalState);
+export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedStore, history: HistoryStore) {
+  const provider = new ProblemsProvider(solved, ctx.globalState, history);
   const view = vscode.window.createTreeView("dsaDrill.problems", { treeDataProvider: provider, showCollapseAll: true });
 
   /** The view's title count, filter line and the context key that swaps the filter buttons. */
@@ -382,6 +388,29 @@ export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedSto
     view,
     provider.onDidChangeTreeData(updateChrome),
     solved.onDidChange(() => provider.refresh()),
+    history.onDidChange(() => provider.refresh()),
+    vscode.commands.registerCommand(
+      "dsaDrill.showHistory",
+      guard(async (arg?: unknown) => {
+        const entry = await entryFor(arg);
+        if (!entry || !provider.source) return;
+        const runs = history.runs(provider.source.label, entry.slug);
+        if (!runs.length) {
+          vscode.window.showInformationMessage(`No runs of "${entry.title}" yet. Each Run Tests is recorded here.`);
+          return runs;
+        }
+        const best = history.best(provider.source.label, entry.slug, entry.hash);
+        void vscode.window.showQuickPick(
+          runs.map((r) => ({
+            label: `${r.verdict === "AC" ? "$(pass-filled)" : "$(error)"} ${describeRun(r)}${r === best ? "  $(star-full) best" : ""}`,
+            description: `${LANGUAGES[r.language]?.name ?? r.language} · ${new Date(r.at).toLocaleString()}`,
+            detail: r.hash && r.hash !== entry.hash ? "against older tests" : undefined,
+          })),
+          { title: `Run history: ${entry.title}`, placeHolder: `${runs.length} most recent run${runs.length === 1 ? "" : "s"}, newest first` },
+        );
+        return runs;
+      }),
+    ),
     vscode.commands.registerCommand("dsaDrill.refreshProblems", () => provider.load({ notify: true })),
     vscode.commands.registerCommand(
       "dsaDrill.filterProblems",

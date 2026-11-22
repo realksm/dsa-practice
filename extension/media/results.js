@@ -95,7 +95,8 @@
         ? `<button id="stop" class="secondary">Stop</button>`
         : `<button id="rerun">Run tests again</button>`
       : "";
-    return `<div class="title">${name}${summary}</div><div class="row">${meta}<span class="grow"></span>${btn}</div>`;
+    const note = s.note ? `<p class="msg note">${esc(s.note)}</p>` : "";
+    return `<div class="title">${name}${summary}</div><div class="row">${meta}<span class="grow"></span>${btn}</div>${note}`;
   }
 
   function cases(s) {

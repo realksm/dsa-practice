@@ -112,7 +112,7 @@ test("installProblem downloads the problem and creates the starter", async () =>
   assert.ok(existsSync(path.join(dir, "problem.md")) && existsSync(path.join(dir, "meta.json")));
   assert.ok(!existsSync(path.join(dir, "starters")), "starters/ is not copied");
   const info = JSON.parse(readFileSync(path.join(dir, ".data", SOURCE_INFO), "utf8"));
-  assert.deepEqual(info, { slug: "add-two", hash: entry.hash, repo: source.label });
+  assert.deepEqual(info, { slug: "add-two", hash: entry.hash, repo: source.label, files: ["01.in", "01.out", "02.in", "02.out"] });
 
   // no repo starter for C++: the built-in one
   const cpp = await addSolution(source, entry, dest, "cpp");

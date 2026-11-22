@@ -21,6 +21,8 @@ export interface SourceInfo {
   slug: string;
   hash: string;
   repo: string;
+  /** The files under .data/ that came from the repo (relative to .data). Everything else there is the user's. */
+  files?: string[];
 }
 
 export interface LocalProblem {
@@ -88,7 +90,8 @@ export interface InstallResult {
 /**
  * Download (or update) a problem. Everything is fetched before anything is written, so a
  * network failure leaves an existing copy as it was. The statement, meta.json and .data/ are
- * replaced; solution files and anything else in the folder are never touched.
+ * replaced; solution files and anything else in the folder are never touched. Files in .data/ that
+ * didn't come from the repo (tests the user added, saved stress cases) are carried over.
  * With `language`, also creates that language's solution file if it doesn't exist.
  */
 export async function installProblem(
@@ -116,7 +119,9 @@ export async function installProblem(
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, contents[i]);
     }
-    const info: SourceInfo = { slug: entry.slug, hash: entry.hash, repo: source.label };
+    const dataFiles = files.filter((f) => f.startsWith(DATA_DIR + "/")).map((f) => f.slice(DATA_DIR.length + 1));
+    await carryOverUserFiles(path.join(dir, DATA_DIR), dataNew, dataFiles);
+    const info: SourceInfo = { slug: entry.slug, hash: entry.hash, repo: source.label, files: dataFiles };
     await fs.writeFile(path.join(dataNew, SOURCE_INFO), JSON.stringify(info, null, 2) + "\n");
     await fs.rm(path.join(dir, DATA_DIR), { recursive: true, force: true });
     await fs.rename(dataNew, path.join(dir, DATA_DIR));
@@ -127,6 +132,37 @@ export async function installProblem(
 
   if (!opts.language) return { dir, createdSolution: false };
   return { dir, ...(await writeStarter(dir, opts.language, starter)) };
+}
+
+/**
+ * Copy the user's own files from the old .data into the new one. A file is the user's if the last
+ * download didn't write it (per .source.json). Copies made before `files` was recorded have no list;
+ * then a file is the user's if the new download doesn't have it either. A user file never replaces
+ * a downloaded one.
+ */
+async function carryOverUserFiles(oldData: string, newData: string, downloaded: string[]) {
+  if (!existsSync(oldData)) return;
+  const info = await readSourceInfo(path.dirname(oldData));
+  const fromRepo = new Set((info?.files ?? downloaded).map((f) => f.toLowerCase()));
+  const fresh = new Set(downloaded.map((f) => f.toLowerCase()));
+  for (const rel of await listFiles(oldData)) {
+    const key = rel.toLowerCase();
+    if (key === SOURCE_INFO || fromRepo.has(key) || fresh.has(key)) continue;
+    const target = path.join(newData, ...rel.split("/"));
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.copyFile(path.join(oldData, ...rel.split("/")), target);
+  }
+}
+
+/** Every file under dir, as "/"-separated paths relative to it. */
+async function listFiles(dir: string, prefix = ""): Promise<string[]> {
+  const out: string[] = [];
+  for (const d of await fs.readdir(dir, { withFileTypes: true })) {
+    const rel = prefix + d.name;
+    if (d.isDirectory()) out.push(...(await listFiles(path.join(dir, d.name), rel + "/")));
+    else if (d.isFile()) out.push(rel);
+  }
+  return out;
 }
 
 /** The starter text: the problem's own starters/<file> if it has one, else the built-in template. Undefined if the solution exists. */

@@ -94,6 +94,33 @@ git push                   users see it on next refresh
 
 Phases 1–2 already replace judge.py for local use.
 
+6. ✅ **Quick wins + stress + history** (done 2026-11-22):
+   1. **Compile cache.** Compiled programs are kept per (source content, compiler settings) for the
+      session, so Run Tests → Run Custom Input → Stress compiles once. Failed compiles aren't cached.
+   2. **Per-language time factor.** Effective limit = `timeLimit × factor`. Defaults: C++ 1, Java 2,
+      Python 1. `meta.json` `timeMultipliers` (author) and the `dsaDrill.timeMultipliers` setting override.
+   3. **Compiler warnings** from a successful compile go to the Problems panel as warnings.
+   4. **Runtime errors at their line.** A Python traceback or Java stack trace from a crashed case
+      marks the line in the solution where it crashed.
+   5. **Your own tests survive an update.** `.source.json` records the downloaded files; on update,
+      any other file in `.data/` (yours, or saved by the stress test) is carried over.
+   6. **Stress test in the editor.** `gen.*` + `brute.*` next to the solution (templates offered if
+      missing). Runs gen with seeds 1..N, compares solution vs brute; the first mismatch (or crash/TLE)
+      is saved as `.data/stress-<seed>.in/.out` and shown in the results panel.
+   7. **Run history.** Every Run Tests on a downloaded problem is recorded (verdict, passed/total,
+      slowest case, language, time; last 30 per problem). Best AC time shows in the sidebar; "Show
+      Run History" lists the runs.
+
+## Feature backlog (ideas, not scheduled)
+
+Practice: hints/editorials (`hints.md`, one hint at a time) · timed contest mode · spaced repetition
+(re-solve suggestions) · stats view (per tag/difficulty, streak, heatmap).
+Platform: custom checkers / interactive problems · memory limit · more languages (Rust, Go, C, Kotlin) ·
+GitHub token (private repos, higher API limit) · several problem sources at once (each its own sidebar
+group; useful once other people publish problem repos, or to keep drafts beside published problems) ·
+import samples from Codeforces/AtCoder (Competitive Companion).
+Distribution: Marketplace publish · run the extension's unit tests in CI.
+
 ## Open items
 
 - ~~GitHub owner/repo name~~: `realksm/dsa-practice` (the default `dsaDrill.repo`). Must be public.

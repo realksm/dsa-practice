@@ -12,6 +12,8 @@ export interface PanelState {
   timeLimitMs: number;
   compileError?: string;
   error?: string;
+  /** A line shown under the header (e.g. what the stress test found). */
+  note?: string;
   custom: {
     running: boolean;
     result?: CaseResult;
@@ -25,6 +27,7 @@ export const emptyState = (): PanelState => ({
   total: 0,
   passed: 0,
   timeLimitMs: 0,
+  note: undefined,
   custom: { running: false },
 });
 

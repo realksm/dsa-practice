@@ -38,7 +38,14 @@ export interface Program {
   env?: NodeJS.ProcessEnv;
 }
 
-export type PrepareResult = { ok: true; program: Program } | { ok: false; error: string };
+/** `warnings`: what the compiler printed on a successful compile (empty if nothing). */
+export type PrepareResult = { ok: true; program: Program; warnings: string } | { ok: false; error: string };
+
+/**
+ * Time limits in meta.json are set from a C++ reference. Java pays ~100 ms of JVM startup per case
+ * (and runs slower on small inputs), so by default it gets twice the limit.
+ */
+export const DEFAULT_TIME_MULTIPLIERS: Record<LanguageId, number> = { cpp: 1, java: 2, python: 1 };
 
 const INSTALL_HINT: Record<string, string> = {
   cpp: "Install g++ (MSYS2/MinGW on Windows, Xcode Command Line Tools on Mac, build-essential on Linux)",
@@ -47,12 +54,12 @@ const INSTALL_HINT: Record<string, string> = {
   python: "Install Python 3",
 };
 
-async function compile(cmd: string[], tool: keyof ToolPaths, cwd: string): Promise<string | null> {
+async function compile(cmd: string[], tool: keyof ToolPaths, cwd: string): Promise<{ error: string } | { warnings: string }> {
   const r = await runProcess(cmd, "", { timeoutMs: 60_000, cwd });
-  if (r.spawnError) return `'${cmd[0]}' could not be started (${r.spawnError}). ${INSTALL_HINT[tool]}, or set its path in the settings.`;
-  if (r.status === "TLE") return "Compilation took longer than 60 s.";
-  if (r.status !== "OK") return (r.stderr || r.stdout).trim() || `Compiler failed (exit code ${r.exitCode}).`;
-  return null;
+  if (r.spawnError) return { error: `'${cmd[0]}' could not be started (${r.spawnError}). ${INSTALL_HINT[tool]}, or set its path in the settings.` };
+  if (r.status === "TLE") return { error: "Compilation took longer than 60 s." };
+  if (r.status !== "OK") return { error: (r.stderr || r.stdout).trim() || `Compiler failed (exit code ${r.exitCode}).` };
+  return { warnings: (r.stderr + r.stdout).trim() };
 }
 
 /** Compile `src` into `workdir` (if needed) and return how to run it. */
@@ -67,23 +74,23 @@ export async function prepare(src: string, workdir: string, tools: ToolPaths = {
       const args = ["-std=c++17", "-O2", "-Wall", "-o", exe, src];
       // Windows gives programs a 1 MB stack; judges like Codeforces give 256 MB.
       if (IS_WIN) args.push("-Wl,--stack,268435456");
-      const error = await compile([t.cpp, ...args], "cpp", workdir);
-      return error ? { ok: false, error } : { ok: true, program: { language, command: [exe] } };
+      const c = await compile([t.cpp, ...args], "cpp", workdir);
+      return "error" in c ? { ok: false, error: c.error } : { ok: true, program: { language, command: [exe] }, warnings: c.warnings };
     }
     case "java": {
-      const error = await compile([t.javac, "-encoding", "UTF-8", "-d", workdir, src], "javac", workdir);
-      if (error) return { ok: false, error };
-      return { ok: true, program: { language, command: [t.java, "-Xss256m", "-cp", workdir, stem] } };
+      const c = await compile([t.javac, "-encoding", "UTF-8", "-d", workdir, src], "javac", workdir);
+      if ("error" in c) return { ok: false, error: c.error };
+      return { ok: true, program: { language, command: [t.java, "-Xss256m", "-cp", workdir, stem] }, warnings: c.warnings };
     }
     case "python": {
       const env = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
-      return { ok: true, program: { language, command: [t.python, src], env } };
+      return { ok: true, program: { language, command: [t.python, src], env }, warnings: "" };
     }
     default:
       return { ok: false, error: `Don't know how to run '${path.extname(src)}' files. Use C++, Java or Python.` };
   }
 }
 
-function stripEmpty(tools: ToolPaths): ToolPaths {
+export function stripEmpty(tools: ToolPaths): ToolPaths {
   return Object.fromEntries(Object.entries(tools).filter(([, v]) => typeof v === "string" && v.trim() !== ""));
 }

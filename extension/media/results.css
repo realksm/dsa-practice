@@ -106,6 +106,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .case-body { padding: 4px 10px 10px; border-top: 1px solid var(--border); }
 
 .msg { margin: 6px 0; }
+.msg.note { opacity: 0.85; }
 .msg code, .msg b { font-family: var(--vscode-editor-font-family); }
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

@@ -54,3 +54,40 @@ export function sameFile(printed: string, source: string): boolean {
   const b = path.resolve(source).toLowerCase();
   return a === b || path.basename(printed).toLowerCase() === path.basename(source).toLowerCase();
 }
+
+/**
+ * Where a crashed program died in `source`, from a Python traceback or a Java stack trace on stderr.
+ * Python: the last `File "...", line N` frame in the source (tracebacks list the innermost call last).
+ * Java: the first `at ...(Main.java:N)` frame (stack traces list the innermost call first).
+ * The message is the exception line, e.g. "ZeroDivisionError: division by zero".
+ */
+export function parseRuntimeError(stderr: string, source: string): CompileMessage | undefined {
+  const lines = stderr.replace(/\r\n?/g, "\n").split("\n");
+  const ext = path.extname(source).toLowerCase();
+  if (ext === ".py") {
+    let line: number | undefined;
+    for (const l of lines) {
+      const m = /^\s*File "(.+)", line (\d+)/.exec(l);
+      if (m && sameFile(m[1], source)) line = +m[2];
+    }
+    if (line === undefined) return;
+    const last = [...lines].reverse().find((l) => /^\S/.test(l) && !/^Traceback /.test(l))?.trim();
+    return { file: source, line, column: 1, severity: "error", message: last || "Runtime error" };
+  }
+  if (ext === ".java") {
+    const base = path.basename(source);
+    let line: number | undefined;
+    for (const l of lines) {
+      const m = /^\s*at .+\((.+?):(\d+)\)\s*$/.exec(l);
+      if (m && m[1].toLowerCase() === base.toLowerCase()) {
+        line = +m[2];
+        break;
+      }
+    }
+    if (line === undefined) return;
+    const head = lines.find((l) => /^(Exception in thread "[^"]*" )?[\w$.]+(Exception|Error)\b/.test(l));
+    const message = head?.replace(/^Exception in thread "[^"]*" /, "").trim() || "Runtime error";
+    return { file: source, line, column: 1, severity: "error", message };
+  }
+  return;
+}

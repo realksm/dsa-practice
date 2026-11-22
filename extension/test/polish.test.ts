@@ -2,21 +2,11 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyFilter, describeFilter, isFilterActive, NO_FILTER, normaliseFilter, tagCounts } from "../src/problems/filter";
 import type { IndexEntry } from "../src/problems/indexFile";
-import { SOLVED_KEY, SolvedStore, StateStore } from "../src/problems/solved";
+import { SOLVED_KEY, SolvedStore } from "../src/problems/solved";
+import { memento } from "./helpers";
 
 const entry = (slug: string, tags?: string[]): IndexEntry => ({ slug, title: slug, files: [], hash: "h", ...(tags ? { tags } : {}) });
 const entries = [entry("two-sum", ["arrays", "hashing"]), entry("max-subarray", ["arrays", "dp"]), entry("untagged")];
-
-function memento(): StateStore & { data: Record<string, unknown> } {
-  const data: Record<string, unknown> = {};
-  return {
-    data,
-    get: <T>(k: string, d: T) => (k in data ? (data[k] as T) : d),
-    update: async (k: string, v: unknown) => {
-      data[k] = JSON.parse(JSON.stringify(v)); // like VS Code: stored as JSON
-    },
-  };
-}
 
 test("filter: no filter shows everything", () => {
   assert.deepEqual(applyFilter(entries, NO_FILTER, () => false).map((e) => e.slug), ["two-sum", "max-subarray", "untagged"]);

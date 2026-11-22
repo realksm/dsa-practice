@@ -53,6 +53,12 @@
         "icon": "$(debug-console)"
       },
       {
+        "command": "dsaDrill.stressTest",
+        "title": "Stress Test (vs brute)",
+        "category": "DSA Drill",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "dsaDrill.stop",
         "title": "Stop Running",
         "category": "DSA Drill",
@@ -106,6 +112,12 @@
         "command": "dsaDrill.markUnsolved",
         "title": "Mark as Unsolved",
         "category": "DSA Drill"
+      },
+      {
+        "command": "dsaDrill.showHistory",
+        "title": "Show Run History",
+        "category": "DSA Drill",
+        "icon": "$(history)"
       }
     ],
     "viewsContainers": {
@@ -163,6 +175,11 @@
           "command": "dsaDrill.markUnsolved",
           "when": "view == dsaDrill.problems && viewItem =~ /\\.solved$/",
           "group": "3_solved"
+        },
+        {
+          "command": "dsaDrill.showHistory",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem/",
+          "group": "3_solved@0"
         }
       ],
       "editor/title/run": [
@@ -175,6 +192,11 @@
           "command": "dsaDrill.runCustomInput",
           "when": "dsaDrill.activeIsSolution",
           "group": "navigation@1"
+        },
+        {
+          "command": "dsaDrill.stressTest",
+          "when": "dsaDrill.activeIsSolution",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -184,6 +206,10 @@
         },
         {
           "command": "dsaDrill.runCustomInput",
+          "when": "editorLangId =~ /^(cpp|java|python)$/"
+        },
+        {
+          "command": "dsaDrill.stressTest",
           "when": "editorLangId =~ /^(cpp|java|python)$/"
         },
         {
@@ -272,6 +298,32 @@
           "default": 10,
           "minimum": 1,
           "description": "Seconds a 'Run Custom Input' run may take before it is stopped."
+        },
+        "dsaDrill.timeMultipliers": {
+          "type": "object",
+          "default": {},
+          "properties": {
+            "cpp": {
+              "type": "number",
+              "minimum": 0.1
+            },
+            "java": {
+              "type": "number",
+              "minimum": 0.1
+            },
+            "python": {
+              "type": "number",
+              "minimum": 0.1
+            }
+          },
+          "additionalProperties": false,
+          "markdownDescription": "Time limit factor per language, e.g. `{ \"python\": 3 }`. A problem's limit is set for C++; unset languages use the problem's `timeMultipliers` in meta.json, else the defaults (C++ 1, Java 2, Python 1)."
+        },
+        "dsaDrill.stressRuns": {
+          "type": "number",
+          "default": 200,
+          "minimum": 1,
+          "markdownDescription": "How many random inputs **Stress Test** tries before it gives up looking for a difference."
         }
       }
     },
