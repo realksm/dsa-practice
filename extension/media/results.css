@@ -78,7 +78,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   margin: 6px 0;
 }
 .case.AC { border-left-color: var(--ok); }
-.case.WA, .case.RE, .case.TLE, .case.OLE { border-left-color: var(--bad); }
+.case.WA, .case.RE, .case.TLE, .case.MLE, .case.OLE { border-left-color: var(--bad); }
 .case.NO_EXPECTED { border-left-color: var(--info); }
 .case.pending { opacity: 0.55; }
 
@@ -98,8 +98,10 @@ button:disabled { opacity: 0.5; cursor: default; }
   min-width: 3.5em;
 }
 .AC .verdict, .verdict-inline.AC, .verdict-inline.NO_EXPECTED { color: var(--ok); }
-.WA .verdict, .RE .verdict, .TLE .verdict, .OLE .verdict,
-.verdict-inline.WA, .verdict-inline.RE, .verdict-inline.TLE, .verdict-inline.OLE { color: var(--bad); }
+.WA .verdict, .RE .verdict, .TLE .verdict, .MLE .verdict, .OLE .verdict,
+.verdict-inline.WA, .verdict-inline.RE, .verdict-inline.TLE, .verdict-inline.MLE, .verdict-inline.OLE { color: var(--bad); }
+.case-head .mem { margin-right: 10px; }
+.warn { color: var(--vscode-editorWarning-foreground); margin-left: 6px; }
 .NO_EXPECTED .verdict { color: var(--info); }
 .verdict-inline { font-family: var(--vscode-editor-font-family); font-weight: 700; }
 

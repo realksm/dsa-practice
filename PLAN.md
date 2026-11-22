@@ -111,11 +111,22 @@ Phases 1–2 already replace judge.py for local use.
       slowest case, language, time; last 30 per problem). Best AC time shows in the sidebar; "Show
       Run History" lists the runs.
 
+7. ✅ **Hints + stats, checkers + memory limit** (done 2026-11-22, not released):
+   1. **Memory limit.** `meta.json` `memoryLimit` is enforced (verdict MLE). A helper (`memwatch`, C,
+      built once with the user's g++ into the temp folder) runs the solution: Windows Job Object (hard
+      limit + peak commit), POSIX wait4 (peak RSS, checked after). Java: `-Xmx` + OutOfMemoryError.
+      Peak memory per case in the panel, CLI and history. No g++: not measured, panel says so.
+   2. **Checkers.** `.data/checker.{cpp,py}`, testlib argument order, exit 0 / 1-2 / other = AC / WA /
+      broken checker (error, blames the problem). Used by Run Tests, Stress Test and `npm run build`.
+   3. **Hints.** `problems/<slug>/hints.md`, `## ` per hint. Not downloaded and not hashed; index.json
+      has a `hints` count. Panel opens them one at a time; count opened is synced per repo + slug.
+   4. **Stats view.** Solved per difficulty / tag / language, daily streak, 53-week activity heatmap
+      (runs per local day, kept uncapped next to the history).
+
 ## Feature backlog (ideas, not scheduled)
 
-Practice: hints/editorials (`hints.md`, one hint at a time) · timed contest mode · spaced repetition
-(re-solve suggestions) · stats view (per tag/difficulty, streak, heatmap).
-Platform: custom checkers / interactive problems · memory limit · more languages (Rust, Go, C, Kotlin) ·
+Practice: editorials · timed contest mode · spaced repetition (re-solve suggestions).
+Platform: interactive problems · more languages (Rust, Go, C, Kotlin) ·
 GitHub token (private repos, higher API limit) · several problem sources at once (each its own sidebar
 group; useful once other people publish problem repos, or to keep drafts beside published problems) ·
 import samples from Codeforces/AtCoder (Competitive Companion).

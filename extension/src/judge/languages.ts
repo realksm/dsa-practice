@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import * as path from "path";
 import { runProcess } from "./runner";
 
@@ -72,8 +73,10 @@ export async function prepare(src: string, workdir: string, tools: ToolPaths = {
     case "cpp": {
       const exe = path.join(workdir, stem + (IS_WIN ? ".exe" : ""));
       const args = ["-std=c++17", "-O2", "-Wall", "-o", exe, src];
-      // Windows gives programs a 1 MB stack; judges like Codeforces give 256 MB.
-      if (IS_WIN) args.push("-Wl,--stack,268435456");
+      // Windows gives programs a 1 MB stack; judges like Codeforces give 256 MB. -static: otherwise
+      // the program loads whichever libstdc++-6.dll comes first on PATH (Git's mingw64 one, say),
+      // which crashes programs built by a different MinGW.
+      if (IS_WIN) args.push("-Wl,--stack,268435456", "-static");
       const c = await compile([t.cpp, ...args], "cpp", workdir);
       return "error" in c ? { ok: false, error: c.error } : { ok: true, program: { language, command: [exe] }, warnings: c.warnings };
     }
@@ -84,11 +87,33 @@ export async function prepare(src: string, workdir: string, tools: ToolPaths = {
     }
     case "python": {
       const env = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
-      return { ok: true, program: { language, command: [t.python, src], env }, warnings: "" };
+      return { ok: true, program: { language, command: [await resolvePython(t.python), src], env }, warnings: "" };
     }
     default:
       return { ok: false, error: `Don't know how to run '${path.extname(src)}' files. Use C++, Java or Python.` };
   }
+}
+
+const resolvedPython = new Map<string, Promise<string>>();
+
+/**
+ * The interpreter's real path (sys.executable). On Windows "python" is often a launcher (the Store
+ * alias, py) that starts the real interpreter as a separate process: then the time limit and Stop
+ * kill only the launcher and memory can't be measured, and every case pays for the extra start.
+ * Falls back to the command as given.
+ */
+export function resolvePython(cmd: string): Promise<string> {
+  let p = resolvedPython.get(cmd);
+  if (!p) {
+    p = runProcess([cmd, "-c", "import sys; print(sys.executable)"], "", { timeoutMs: 15_000 }).then((r) => {
+      const exe = r.status === "OK" ? r.stdout.trim() : "";
+      if (exe && path.isAbsolute(exe) && existsSync(exe)) return exe;
+      resolvedPython.delete(cmd); // try again next time (e.g. after installing Python)
+      return cmd;
+    });
+    resolvedPython.set(cmd, p);
+  }
+  return p;
 }
 
 export function stripEmpty(tools: ToolPaths): ToolPaths {

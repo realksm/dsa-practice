@@ -2,13 +2,17 @@
  * Start a new problem.
  *
  *   npm run new <slug>
+ *   npm run new <slug> -- --checker --hints
  *
  * Creates problems/<slug>/ (problem.md, meta.json, .data/) and references/<slug>/ref.cpp.
+ * --checker adds .data/checker.cpp (for problems with several right answers), --hints adds hints.md.
  * references/ is gitignored: reference solutions are never committed.
  */
 import { promises as fs } from "fs";
 import * as path from "path";
+import { CHECKER_TEMPLATE } from "../extension/src/judge/checker";
 import { DATA_DIR } from "../extension/src/judge/tests";
+import { HINTS_FILE, HINTS_TEMPLATE } from "../extension/src/problems/hints";
 import { isValidSlug } from "../extension/src/problems/indexFile";
 import { exists, PROBLEMS, REFERENCES, ROOT, titleFromSlug } from "./common";
 
@@ -59,8 +63,14 @@ int main() {
 `;
 
 async function main() {
-  const slug = process.argv[2];
-  if (!slug || process.argv.length > 3) throw new Error("Usage: npm run new <slug>   (e.g. npm run new two-sum)");
+  const args = process.argv.slice(2);
+  const flags = new Set(args.filter((a) => a.startsWith("--")));
+  const rest = args.filter((a) => !a.startsWith("--"));
+  const unknown = [...flags].filter((f) => f !== "--checker" && f !== "--hints");
+  const slug = rest[0];
+  if (!slug || rest.length > 1 || unknown.length) {
+    throw new Error("Usage: npm run new <slug> [-- --checker --hints]   (e.g. npm run new two-sum)");
+  }
   if (!isValidSlug(slug)) throw new Error(`'${slug}' is not a valid slug: use lowercase letters, digits and dashes.`);
 
   const dir = path.join(PROBLEMS, slug);
@@ -72,6 +82,8 @@ async function main() {
   await fs.mkdir(path.join(dir, DATA_DIR), { recursive: true });
   await fs.writeFile(path.join(dir, "problem.md"), problemMd(title));
   await fs.writeFile(path.join(dir, "meta.json"), JSON.stringify(meta, null, 2) + "\n");
+  if (flags.has("--checker")) await fs.writeFile(path.join(dir, DATA_DIR, "checker.cpp"), CHECKER_TEMPLATE);
+  if (flags.has("--hints")) await fs.writeFile(path.join(dir, HINTS_FILE), HINTS_TEMPLATE);
 
   await fs.mkdir(refDir, { recursive: true });
   const ref = path.join(refDir, "ref.cpp");
@@ -86,6 +98,8 @@ Next:
   3. ${rel(dir)}/${DATA_DIR}/01.in, 02.in ...   test inputs (no outputs)
   4. ${rel(ref)}     the reference solution (or ref.py / Ref.java)
   5. npm run build -- ${slug}   writes the .out files and rebuilds index.json`);
+  if (flags.has("--checker")) console.log(`  ${rel(dir)}/${DATA_DIR}/checker.cpp   accepts or rejects an output (exit 0 / 1)`);
+  if (flags.has("--hints")) console.log(`  ${rel(dir)}/${HINTS_FILE}   one "## " heading per hint, shown one at a time`);
 }
 
 main().catch((e) => {

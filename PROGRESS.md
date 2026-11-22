@@ -16,6 +16,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
 | 5. Polish (solved tracking, tags, publish) | ✅ Done 2026-11-22: solved tracking, filter, `.vsix` released as v0.1.0 on GitHub (Marketplace: not planned for now) |
 | 6. Quick wins + stress test + run history | ✅ Done 2026-11-22 (90670ea), released as v0.2.0 on GitHub |
+| 7. Hints + stats, checkers + memory limit | ✅ Done 2026-11-22 (not released; CHANGELOG has it under "Unreleased") |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -28,8 +29,8 @@ and the sidebar by eye in VS Code.
 ```
 cd extension
 npm install                  # only if node_modules/ is missing
-npm test                     # 68 unit tests (engine, compile errors, problems/index/download, filter, solved, phase 6), about 7 s
-npm run test:vscode          # 20 tests inside a real VS Code (judge, sidebar, filter/solved, warnings, stress, history)
+npm test                     # 86 unit tests (engine, compile errors, problems/index/download, filter, solved, phases 6-7), about 8 s
+npm run test:vscode          # 24 tests inside a real VS Code (judge, sidebar, filter/solved, warnings, stress, history, hints, stats, MLE, checker)
 npm run package              # builds dsa-drill-<version>.vsix (gitignored) with vsce
 npm run judge -- <solution>  # judge from the terminal
 npm run index                # rebuild ../index.json from ../problems/ (--check: fail if stale)
@@ -58,11 +59,13 @@ npm run check                # what CI runs: validation + index.json up to date,
 extension/
   src/judge/compare.ts      token compare: ints exact (BigInt), decimals within eps, nan never matches
   src/judge/runner.ts       spawn with time limit, output cap, cancel; describeExit (0xC00000FD etc.)
-  src/judge/languages.ts    cpp (g++ -O2, 256 MB stack on Windows), java (Main.java, -Xss256m), python
+  src/judge/languages.ts    cpp (g++ -O2, 256 MB stack + -static on Windows), java (Main.java, -Xss256m), python (resolved to sys.executable)
+  src/judge/memory.ts       memwatch helper (C source, built once with g++ into %TEMP%/dsa-drill-memwatch-<hash>), runMeasured, Java flags
+  src/judge/checker.ts      findChecker (.data/checker.*), Checker (testlib arg order, exit 0/1-2/other), CHECKER_TEMPLATE
   src/judge/tests.ts        reads .data/NN.in + NN.out|.ans (natural order), meta.json
   src/judge/cache.ts        ProgramCache: compiled programs per (path, compiler settings, source text), LRU of 8
   src/judge/stress.ts       stressTest (gen seed -> brute vs solution), saveStressCase, helper templates
-  src/judge/judge.ts        judge(): every case with live progress; runOnInput(): custom input
+  src/judge/judge.ts        judge(): every case with live progress; runOnInput(): custom input; runCase(program, case, CaseContext)
   src/problems/indexFile.ts index.json types, parseIndex (validates slugs and paths), buildIndex, hashFiles
   src/problems/source.ts    parseRepo; GitHubSource (raw.githubusercontent, pinned to a commit); LocalSource
   src/problems/install.ts   installProblem (download/update), addSolution, scanLocal, isOutdated
@@ -70,12 +73,16 @@ extension/
   src/problems/view.ts      Problems sidebar (TreeView) + open/refresh/update/filter/markUnsolved commands
   src/problems/solved.ts    SolvedStore: globalState key dsaDrill.solved, { "<repo label>::<slug>": { languages, firstAt, hash } }
   src/problems/history.ts   HistoryStore (runs per repo::slug, newest first, max 30), summariseRun, JsonFileStore
+  src/problems/hints.ts     parseHints ("## " per hint), HintStore (globalState dsaDrill.hints, synced), HINTS_TEMPLATE
+  src/problems/stats.ts     ActivityStore (runs per local day, key dsaDrill.activity in history.json), computeStats, streakOf
   src/problems/filter.ts    ProblemFilter { tags (any of), hideSolved }, stored in globalState key dsaDrill.filter
   src/problems/buildIndexCli.ts  npm run index
   src/cli.ts                terminal front end (npm run judge)
   src/extension.ts          commands, CodeLens, status bar, Problems-panel errors, ".data next to file" detection
   src/diagnostics.ts        parses g++ / javac error lines
   src/ui/resultsPanel.ts    webview panel host (state is pushed to the webview as one object)
+  src/ui/hintsPanel.ts      hints webview (rebuilt on each change; markdown via markdown.api.render)
+  src/ui/statsPanel.ts      stats webview: KPI tiles, heatmap (fixed run-count steps), meter lists; media/stats.css
   media/results.js|css      panel UI (theme colours, expand/collapse, diff line highlight, custom input box)
   media/icon.svg            activity bar icon
   test/*.test.ts            node:test unit tests
@@ -146,8 +153,8 @@ legacy/                     old judge.py, PROMPT.md, README.md, old problems, ol
 Opening a problem opens the solution on the left and the rendered `problem.md` on the right.
 
 ### meta.json fields the engine reads
-`timeLimit` (seconds, default 2), `exact`, `ignoreCase`, `eps`. `title`, `difficulty`, `tags` are used by the
-index. `memoryLimit` is stored but not used yet.
+`timeLimit` (seconds, default 2), `memoryLimit` (MB, none if absent), `exact`, `ignoreCase`, `eps`,
+`timeMultipliers`. `title`, `difficulty`, `tags` are used by the index.
 
 ## Decisions made along the way
 
@@ -180,6 +187,11 @@ index. `memoryLimit` is stored but not used yet.
 - Not checked by eye in light/dark themes yet; only checked that it renders. The sidebar hasn't been
   looked at by eye either (its contents are checked by the tests).
 - No proxy handling beyond what VS Code gives the global `fetch`.
+- Memory on Mac isn't enforced during the run (checked afterwards, like Linux) and a killed helper
+  can leave the child running there (Linux uses PR_SET_PDEATHSIG). Only Windows was tried by hand.
+- Without g++ memory isn't measured at all (Python/Java users without g++); the panel says so.
+- A checker can't `#include "testlib.h"` (only .in/.out/checker go in .data, and the compile cache
+  ignores headers). Checkers are written by hand against the documented argument order.
 
 ## Phase 4 decisions (2026-11-22)
 
@@ -253,6 +265,35 @@ index. `memoryLimit` is stored but not used yet.
 - Results panel state has a `note` line (used by the stress test).
 - `memento()` test helper moved to test/helpers.ts.
 
+## Phase 7 decisions (2026-11-22)
+
+- **memwatch:** Node can't see a child's memory, so solutions run under a small C helper compiled
+  with the user's g++ (`-O2 -municode -static` on Windows). Args: `<limitMB> <report file> <command>`;
+  on Windows the command is one pre-quoted command line (quoteWindowsArg). Report:
+  `<peak bytes> <limit hit> <wall ms>` or `spawn_error <code>` (then the run is retried without the
+  helper so "not installed" reads as before). The helper's wall time replaces Node's (C++ cases
+  dropped from ~38 ms to ~5 ms because process start-up isn't counted).
+- Windows: Job Object with KILL_ON_JOB_CLOSE (killing the helper on TLE/Stop kills the solution) and
+  JOB_MEMORY limit; "limit hit" comes from the job's completion port. Peak = PeakJobMemoryUsed.
+- Java isn't hard-capped (the JVM's own ~50 MB would count): `-Xmx<limit>m`, MLE = OutOfMemoryError.
+  Always `-Xms16m -XX:+UseSerialGC`: committed memory 352 MB -> 47 MB with the same time.
+- Python: `python` on this machine is the Windows Store alias, which starts the real interpreter
+  outside the job (measured 10 MB for a 50 MB program, and Stop only killed the alias). prepare()
+  now resolves it once with `sys.executable`.
+- `-static` for C++ on Windows: Git Bash puts Git's mingw64/bin first on PATH and programs built by
+  MSYS2's g++ loaded its libstdc++-6.dll and crashed (found through the checker template's ifstream).
+- Checker lives in `.data/` (hidden like the tests, never taken for a solution file, part of the hash).
+  A checker failure throws CheckerError for the whole run, worded as the problem's bug. Expected
+  `null` (no .out) still gives NO_EXPECTED without running the checker.
+- Hints are fetched from the source when asked (cached per hash for the session), not downloaded:
+  no spoiler file next to the solution, and hint edits don't mark tests as changed. The sidebar item's
+  contextValue gets a `.hints` suffix (menus' regexes allow it). Internal command
+  `dsaDrill.hintAction next|reset` backs the panel buttons (and the tests).
+- Activity: `{ "YYYY-MM-DD": { runs, accepted } }` by local date, in history.json next to the runs,
+  seeded once from the existing history. Recorded before history.add so the stats redraw sees it.
+- Stats page drawn server-side into webview.html (style-src allows 'unsafe-inline' for bar widths).
+  Checked by eye in light and dark (headless Brave screenshots of the page with theme variables).
+
 ## Releases
 
 - **v0.1.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.1.0, with
@@ -265,10 +306,12 @@ index. `memoryLimit` is stored but not used yet.
 
 ## Next steps
 
-0. v0.2.0 is released. Still to do: try Stress Test and the history by hand (F5). The stray `max-subarray/` and `two-sum/` at the repo root
+0. Phase 7 is built and tested (86 unit + 24 VS Code tests), not committed yet. Try hints, stats,
+   MLE and a checker by hand (F5), then release 0.3.0. Also still to do: try Stress Test and the history by hand. The stray `max-subarray/` and `two-sum/` at the repo root
    are downloaded copies from the GitHub check, not part of the repo.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
    `npx vsce login` + `npx vsce publish`).
-4. More problems: `npm run new <slug>`, `npm run build -- --stress`, commit, push.
+4. More problems: `npm run new <slug>` (add `-- --checker --hints` as needed), `npm run build -- --stress`, commit, push.
+   The two published problems have no hints.md yet.

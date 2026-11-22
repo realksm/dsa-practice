@@ -19,7 +19,7 @@ export interface SolvedRecord {
 /** The part of vscode.Memento this needs. */
 export interface StateStore {
   get<T>(key: string, defaultValue: T): T;
-  update(key: string, value: unknown): Thenable<void>;
+  update(key: string, value: unknown): PromiseLike<void>;
 }
 
 const keyOf = (repo: string, slug: string) => `${repo}::${slug}`;

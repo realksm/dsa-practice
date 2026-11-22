@@ -15,7 +15,7 @@ export interface ProblemMeta {
   tags?: string[];
   /** Seconds per test. */
   timeLimit?: number;
-  /** Megabytes (informational for now). */
+  /** Megabytes per test (C++/Python: the whole process; Java: the heap, via -Xmx). */
   memoryLimit?: number;
   /** Compare line by line instead of by tokens. */
   exact?: boolean;

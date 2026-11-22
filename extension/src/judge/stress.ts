@@ -10,7 +10,9 @@ import { existsSync, promises as fs } from "fs";
 import * as path from "path";
 import type { ProgramCache } from "./cache";
 import { CompareOptions } from "./compare";
-import { CaseResult, runCase, timeLimitFor, withProgram } from "./judge";
+import { findChecker } from "./checker";
+import { CaseContext, CaseResult, memoryLimitFor, runCase, timeLimitFor, withChecker, withProgram } from "./judge";
+import { getMemwatch } from "./memory";
 import { LanguageId, languageOf, PrepareResult, Program, ToolPaths } from "./languages";
 import { describeExit, runProcess, RunResult } from "./runner";
 import { DATA_DIR, loadMeta, problemDirOf } from "./tests";
@@ -48,7 +50,7 @@ export type StressOutcome =
   /** gen or brute itself failed: fix the helper, not the solution. */
   | { kind: "helperFailed"; file: string; seed: number; message: string; input?: string }
   /** The first failing seed. result.expected is brute's output. */
-  | { kind: "found"; seed: number; result: CaseResult; timeLimitMs: number };
+  | { kind: "found"; seed: number; result: CaseResult; timeLimitMs: number; memoryLimitMb?: number; memoryMeasured: boolean; checker?: string };
 
 export interface StressOptions {
   tools?: ToolPaths;
@@ -75,10 +77,14 @@ export async function stressTest(solutionPath: string, opts: StressOptions = {})
   const meta = await loadMeta(problemDir);
   const timeLimitMs = timeLimitFor(solutionPath, meta, opts);
   const compare: CompareOptions = { exact: meta.exact, ignoreCase: meta.ignoreCase, eps: meta.eps, ...opts.compare };
+  const memoryLimitMb = memoryLimitFor(meta);
+  const memwatch = await getMemwatch(opts.tools?.cpp);
+  const checkerFile = await findChecker(problemDir);
 
   return withProgram(solutionPath, opts, (sol) =>
     withProgram(helpers.gen!, opts, (gen) =>
-      withProgram(helpers.brute!, opts, async (brute) => {
+      withProgram(helpers.brute!, opts, (brute) => withChecker(checkerFile, opts, async (checker) => {
+        const ctx: CaseContext = { timeLimitMs, compare, memoryLimitMb, memwatch, checker };
         for (const [file, p] of [[solutionPath, sol], [helpers.gen!, gen], [helpers.brute!, brute]] as [string, PrepareResult][]) {
           if (!p.ok) return { kind: "compileError", file, error: p.error };
         }
@@ -98,12 +104,14 @@ export async function stressTest(solutionPath: string, opts: StressOptions = {})
           const bErr = helperError(br);
           if (bErr) return { kind: "helperFailed", file: helpers.brute!, seed, message: bErr, input };
 
-          const r = await runCase(s, { name: `stress-${seed}`, input, expected: br.stdout }, timeLimitMs, compare, opts.signal);
+          const r = await runCase(s, { name: `stress-${seed}`, input, expected: br.stdout }, ctx, opts.signal);
           if (opts.signal?.aborted) return { kind: "cancelled", runs: seed - 1 };
-          if (r.verdict !== "AC") return { kind: "found", seed, result: r, timeLimitMs };
+          if (r.verdict !== "AC") {
+            return { kind: "found", seed, result: r, timeLimitMs, memoryLimitMb, memoryMeasured: !!memwatch, ...(checkerFile ? { checker: path.basename(checkerFile) } : {}) };
+          }
         }
         return { kind: "passed", runs };
-      }),
+      })),
     ),
   );
 }

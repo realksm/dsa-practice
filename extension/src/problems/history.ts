@@ -13,7 +13,7 @@ export const HISTORY_KEY = "dsaDrill.history";
 export const MAX_RUNS = 30;
 
 /** AC, a failing verdict (the first failing case's), or CE for a compile error. */
-export type RunVerdict = "AC" | "WA" | "TLE" | "RE" | "OLE" | "CE";
+export type RunVerdict = "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "CE";
 
 export interface RunRecord {
   /** ISO time. */
@@ -24,6 +24,8 @@ export interface RunRecord {
   total: number;
   /** Slowest case in ms (0 for a compile error). */
   maxTimeMs: number;
+  /** Highest peak memory of any case, in MB (one decimal), when it was measured. */
+  peakMb?: number;
   /** Test hash the run was against, if known. */
   hash?: string;
 }
@@ -33,16 +35,19 @@ export function summariseRun(
   cases: CaseResult[],
   total: number,
   compileError: boolean,
-): Pick<RunRecord, "verdict" | "passed" | "total" | "maxTimeMs"> | undefined {
+): Pick<RunRecord, "verdict" | "passed" | "total" | "maxTimeMs" | "peakMb"> | undefined {
   if (compileError) return { verdict: "CE", passed: 0, total, maxTimeMs: 0 };
   const failed = cases.find((c) => c.verdict !== "AC" && c.verdict !== "NO_EXPECTED");
   const passed = cases.filter((c) => c.verdict === "AC").length;
   if (!failed && (total === 0 || passed !== total)) return;
+  const measured = cases.flatMap((c) => (c.memoryBytes !== undefined ? [c.memoryBytes] : []));
+  const peak = measured.length ? Math.max(...measured) : undefined;
   return {
     verdict: failed ? (failed.verdict as RunVerdict) : "AC",
     passed,
     total,
     maxTimeMs: Math.round(Math.max(0, ...cases.map((c) => c.timeMs))),
+    ...(peak !== undefined ? { peakMb: Math.round(peak / 104857.6) / 10 } : {}),
   };
 }
 
@@ -60,6 +65,11 @@ export class HistoryStore {
   /** Newest first. */
   runs(repo: string, slug: string): RunRecord[] {
     return this.all()[keyOf(repo, slug)] ?? [];
+  }
+
+  /** Every kept run, of every problem. */
+  allRuns(): RunRecord[] {
+    return Object.values(this.all()).flat();
   }
 
   async add(repo: string, slug: string, run: RunRecord): Promise<void> {
@@ -84,7 +94,7 @@ export class HistoryStore {
 }
 
 export function describeRun(r: RunRecord): string {
-  return r.verdict === "CE" ? "Compile error" : `${r.verdict} ${r.passed}/${r.total} · ${r.maxTimeMs} ms`;
+  return r.verdict === "CE" ? "Compile error" : `${r.verdict} ${r.passed}/${r.total} · ${r.maxTimeMs} ms${r.peakMb !== undefined ? ` · ${r.peakMb} MB` : ""}`;
 }
 
 /**

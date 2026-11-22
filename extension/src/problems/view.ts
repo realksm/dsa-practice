@@ -6,7 +6,12 @@ import { LanguageId, LANGUAGES } from "../judge/languages";
 import { applyFilter, describeFilter, FILTER_KEY, isFilterActive, NO_FILTER, normaliseFilter, ProblemFilter, tagCounts } from "./filter";
 import { IndexEntry, ProblemIndex } from "./indexFile";
 import { addSolution, InstallResult, installProblem, isOutdated, LocalProblem, scanLocal } from "./install";
+import { Hint, HINTS_FILE, HintStore, parseHints } from "./hints";
 import { describeRun, HistoryStore } from "./history";
+import { readSourceInfo } from "./install";
+import { ActivityStore, computeStats, dayKey } from "./stats";
+import { HintsPanel } from "../ui/hintsPanel";
+import { StatsPanel } from "../ui/statsPanel";
 import { SolvedRecord, SolvedStore, StateStore } from "./solved";
 import { DEFAULT_REPO, ProblemSource, sourceFor } from "./source";
 
@@ -49,6 +54,7 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
     readonly solved: SolvedStore,
     private readonly state: StateStore,
     readonly history?: HistoryStore,
+    readonly hintStore?: HintStore,
   ) {
     this.filter = normaliseFilter(state.get(FILTER_KEY, NO_FILTER));
   }
@@ -201,8 +207,8 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
       : solved
         ? new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
         : new vscode.ThemeIcon(local ? "file-code" : "circle-large-outline");
-    // contextValue is "problem", "problem.local" or "problem.outdated", plus ".solved" (see package.json menus)
-    item.contextValue = (outdated ? "problem.outdated" : local ? "problem.local" : "problem") + (solved ? ".solved" : "");
+    // contextValue is "problem", "problem.local" or "problem.outdated", then ".solved", then ".hints" (see package.json menus)
+    item.contextValue = (outdated ? "problem.outdated" : local ? "problem.local" : "problem") + (solved ? ".solved" : "") + (e.hints ? ".hints" : "");
     const tip = new vscode.MarkdownString(`**${e.title}**  \n${cap(e.difficulty || "unrated")}${e.tags?.length ? " · " + e.tags.join(", ") : ""}`);
     tip.appendMarkdown(`  \n${e.files.filter((f) => f.endsWith(".in")).length} tests`);
     if (solved) {
@@ -212,6 +218,10 @@ export class ProblemsProvider implements vscode.TreeDataProvider<Node> {
     }
     if (best) tip.appendMarkdown(`  \nBest: ${best.maxTimeMs} ms slowest case (${LANGUAGES[best.language]?.name ?? best.language}, ${best.at.slice(0, 10)})`);
     if (runs[0]) tip.appendMarkdown(`  \nLast run: ${describeRun(runs[0])} (${runs[0].at.slice(0, 10)}) · ${runs.length} run${runs.length === 1 ? "" : "s"} kept`);
+    if (e.hints) {
+      const opened = this.source && this.hintStore ? this.hintStore.shown(this.source.label, e.slug) : 0;
+      tip.appendMarkdown(`  \n${e.hints} hint${e.hints === 1 ? "" : "s"}${opened ? ` (${Math.min(opened, e.hints)} opened)` : ""}: right-click → Show Hints`);
+    }
     if (local) tip.appendMarkdown(`  \nDownloaded to \`${local.dir}\``);
     if (outdated) tip.appendMarkdown("  \nThe tests changed since you downloaded them.");
     item.tooltip = tip;
@@ -262,8 +272,9 @@ function slugOf(arg: unknown): string | undefined {
   return n?.kind === "problem" ? n.entry.slug : undefined;
 }
 
-export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedStore, history: HistoryStore) {
-  const provider = new ProblemsProvider(solved, ctx.globalState, history);
+export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedStore, history: HistoryStore, activity: ActivityStore) {
+  const hintStore = new HintStore(ctx.globalState);
+  const provider = new ProblemsProvider(solved, ctx.globalState, history, hintStore);
   const view = vscode.window.createTreeView("dsaDrill.problems", { treeDataProvider: provider, showCollapseAll: true });
 
   /** The view's title count, filter line and the context key that swaps the filter buttons. */
@@ -382,6 +393,99 @@ export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedSto
         return undefined;
       }
     };
+
+  // ---- hints ----
+
+  /** hints.md is fetched when asked for (never downloaded); kept per test hash for the session. */
+  const hintCache = new Map<string, Promise<Hint[]>>();
+  function hintsFor(entry: IndexEntry): Promise<Hint[]> {
+    const source = provider.source!;
+    const key = `${source.label}::${entry.slug}::${entry.hash}`;
+    let p = hintCache.get(key);
+    if (!p) {
+      p = source.readProblemFile(entry.slug, HINTS_FILE).then((b) => parseHints(b.toString("utf8")));
+      p.catch(() => hintCache.delete(key)); // offline now: try again next time
+      hintCache.set(key, p);
+    }
+    return p;
+  }
+
+  let hintsOpen: { entry: IndexEntry; hints: Hint[] } | undefined;
+  const hintsView = () => hintsOpen && { title: hintsOpen.entry.title, hints: hintsOpen.hints, shown: Math.min(hintStore.shown(provider.source!.label, hintsOpen.entry.slug), hintsOpen.hints.length) };
+  async function hintAction(action: "next" | "reset") {
+    if (!hintsOpen || !provider.source) return;
+    const { entry, hints } = hintsOpen;
+    const shown = hintStore.shown(provider.source.label, entry.slug);
+    await hintStore.setShown(provider.source.label, entry.slug, action === "next" ? Math.min(shown + 1, hints.length) : 0);
+    await hintsPanel.refresh(hintsView()!);
+    provider.refresh();
+  }
+  const hintsPanel = new HintsPanel((action) => void hintAction(action));
+
+  /** The problem of the active solution file, if it was downloaded from the current repo. */
+  async function activeEntry(): Promise<IndexEntry | undefined> {
+    const doc = vscode.window.activeTextEditor?.document;
+    if (!doc || doc.uri.scheme !== "file") return;
+    const info = await readSourceInfo(path.dirname(doc.uri.fsPath));
+    if (!info?.slug || info.repo !== provider.source?.label) return;
+    return provider.index?.problems.find((p) => p.slug === info.slug);
+  }
+
+  async function showHints(arg?: unknown) {
+    const index = await provider.ensureLoaded();
+    let entry = slugOf(arg) ? await entryFor(arg) : await activeEntry();
+    if (!entry) {
+      const withHints = index.problems.filter((p) => p.hints);
+      if (!withHints.length) {
+        vscode.window.showInformationMessage(`No problem in ${provider.source?.label} has hints yet.`);
+        return;
+      }
+      const pick = await vscode.window.showQuickPick(
+        withHints.map((p) => ({ label: p.title, description: `${p.hints} hint${p.hints === 1 ? "" : "s"}`, entry: p })),
+        { placeHolder: "Hints for which problem?", matchOnDescription: true },
+      );
+      entry = pick?.entry;
+      if (!entry) return;
+    }
+    if (!entry.hints) {
+      vscode.window.showInformationMessage(`"${entry.title}" has no hints.`);
+      return;
+    }
+    const hints = await vscode.window.withProgress({ location: { viewId: "dsaDrill.problems" } }, () => hintsFor(entry!));
+    if (!hints.length) {
+      vscode.window.showInformationMessage(`"${entry.title}" has no hints.`);
+      return;
+    }
+    hintsOpen = { entry, hints };
+    await hintsPanel.show(hintsView()!);
+    return hintsPanel.lastShown;
+  }
+
+  // ---- stats ----
+
+  const statsPanel = new StatsPanel(ctx.extensionUri);
+  const stats = () => computeStats(provider.index?.problems ?? [], (slug) => provider.solvedRecord(slug), activity.days());
+  async function showStats() {
+    await provider.ensureLoaded();
+    statsPanel.show(stats(), provider.source?.label ?? "", dayKey(new Date()));
+    return stats();
+  }
+  const refreshStats = () => statsPanel.visible && statsPanel.update(stats(), provider.source?.label ?? "", dayKey(new Date()));
+
+  ctx.subscriptions.push(
+    hintsPanel,
+    statsPanel,
+    solved.onDidChange(refreshStats),
+    history.onDidChange(refreshStats),
+    provider.onDidChangeTreeData(refreshStats),
+    vscode.commands.registerCommand("dsaDrill.showHints", guard(showHints)),
+    // what the hints panel's buttons do; not in package.json (the VS Code tests call it)
+    vscode.commands.registerCommand("dsaDrill.hintAction", async (action: "next" | "reset") => {
+      await hintAction(action);
+      return hintsPanel.lastShown;
+    }),
+    vscode.commands.registerCommand("dsaDrill.showStats", guard(showStats)),
+  );
 
   ctx.subscriptions.push(
     provider,

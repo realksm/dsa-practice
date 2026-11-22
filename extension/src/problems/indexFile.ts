@@ -6,6 +6,7 @@ import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import * as path from "path";
 import { DATA_DIR } from "../judge/tests";
+import { HINTS_FILE, parseHints } from "./hints";
 
 export const INDEX_FILE = "index.json";
 export const PROBLEMS_DIR = "problems";
@@ -21,6 +22,8 @@ export interface IndexEntry {
   files: string[];
   /** Content hash of everything except starters/. Changes when the statement, meta or tests change. */
   hash: string;
+  /** How many hints hints.md has (it is fetched when asked for, never downloaded or hashed). */
+  hints?: number;
 }
 
 export interface ProblemIndex {
@@ -67,6 +70,7 @@ export function parseIndex(text: string): ProblemIndex {
     }
     if (typeof p.hash !== "string") throw new Error(`index.json has no hash for ${p.slug}`);
     if (typeof p.title !== "string") p.title = p.slug;
+    if (p.hints !== undefined && !(Number.isInteger(p.hints) && p.hints > 0)) delete p.hints;
   }
   return idx;
 }
@@ -145,6 +149,8 @@ export async function buildIndex(repoRoot: string): Promise<BuildResult> {
       }
     }
     if (!meta.title) result.warnings.push({ slug, message: "meta.json has no title" });
+    const hints = all.includes(HINTS_FILE) ? parseHints(await fs.readFile(path.join(dir, HINTS_FILE), "utf8")).length : 0;
+    if (all.includes(HINTS_FILE) && !hints) result.warnings.push({ slug, message: `${HINTS_FILE} has no "## " hint headings` });
     const hashed = await Promise.all(
       files.filter((f) => !isStarter(f)).map(async (rel) => ({ rel, content: await fs.readFile(path.join(dir, rel)) })),
     );
@@ -155,6 +161,7 @@ export async function buildIndex(repoRoot: string): Promise<BuildResult> {
       ...(Array.isArray(meta.tags) && meta.tags.length ? { tags: meta.tags.map(String) } : {}),
       files,
       hash: hashFiles(hashed),
+      ...(hints ? { hints } : {}),
     });
   }
   return result;

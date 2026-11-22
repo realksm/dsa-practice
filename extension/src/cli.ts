@@ -15,6 +15,7 @@ const LABEL: Record<Verdict, string> = {
   AC: green("✓ PASS"),
   WA: red("✗ WA  "),
   TLE: red("✗ TLE "),
+  MLE: red("✗ MLE "),
   RE: red("✗ RE  "),
   OLE: red("✗ OLE "),
   NO_EXPECTED: cyan("• RAN "),
@@ -63,7 +64,8 @@ async function main() {
   console.log(bold(`▶ ${solution}`));
   const show = (r: CaseResult) => {
     const ms = dim(`${Math.round(r.timeMs).toString().padStart(6)} ms`);
-    console.log(`  ${LABEL[r.verdict]} case ${r.name.padEnd(4)} ${ms}${r.message ? "  " + yellow(r.message) : ""}`);
+    const mem = r.memoryBytes !== undefined ? dim(`${(r.memoryBytes / 1048576).toFixed(1).padStart(7)} MB`) : "";
+    console.log(`  ${LABEL[r.verdict]} case ${r.name.padEnd(4)} ${ms}${mem}${r.message ? "  " + yellow(r.message) : ""}`);
     if (r.verdict !== "AC") {
       console.log(dim("    input:\n") + indent(clip(r.input)));
       if (r.verdict === "WA") {
@@ -85,11 +87,16 @@ async function main() {
     process.exit(1);
   }
   const slowest = Math.max(0, ...report.cases.map((r) => r.timeMs));
+  const peak = Math.max(0, ...report.cases.map((r) => r.memoryBytes ?? 0));
+  const limits =
+    dim(`   slowest ${Math.round(slowest)} ms`) +
+    (peak ? dim(`, peak ${(peak / 1048576).toFixed(1)} MB${report.memoryLimitMb ? ` of ${report.memoryLimitMb} MB` : ""}`) : "") +
+    (report.memoryLimitMb && !report.memoryMeasured ? yellow("   (memory limit not checked: needs g++)") : "");
   const failed = report.cases.filter((r) => r.verdict !== "AC" && r.verdict !== "NO_EXPECTED").length;
   console.log();
   if (report.total === 0) console.log(yellow("No test cases found."));
-  else if (failed === 0) console.log(green(bold(`ALL PASSED  ${report.passed}/${report.total}`)) + dim(`   slowest ${Math.round(slowest)} ms`));
-  else console.log(red(bold(`FAILED  ${report.passed}/${report.total} passed`)) + dim(`   slowest ${Math.round(slowest)} ms`));
+  else if (failed === 0) console.log(green(bold(`ALL PASSED  ${report.passed}/${report.total}`)) + limits);
+  else console.log(red(bold(`FAILED  ${report.passed}/${report.total} passed`)) + limits);
   process.exit(failed ? 1 : 0);
 }
 

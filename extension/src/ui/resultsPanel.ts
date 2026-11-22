@@ -10,6 +10,11 @@ export interface PanelState {
   total: number;
   passed: number;
   timeLimitMs: number;
+  memoryLimitMb?: number;
+  /** False when memory couldn't be measured, so the limit wasn't checked. */
+  memoryMeasured?: boolean;
+  /** The problem's checker file name, if it has one. */
+  checker?: string;
   compileError?: string;
   error?: string;
   /** A line shown under the header (e.g. what the stress test found). */
@@ -27,6 +32,9 @@ export const emptyState = (): PanelState => ({
   total: 0,
   passed: 0,
   timeLimitMs: 0,
+  memoryLimitMb: undefined,
+  memoryMeasured: undefined,
+  checker: undefined,
   note: undefined,
   custom: { running: false },
 });

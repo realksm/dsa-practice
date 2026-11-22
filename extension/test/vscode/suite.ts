@@ -240,9 +240,90 @@ it("run history records each Run Tests of a downloaded problem", async () => {
   const runs = await vscode.commands.executeCommand<{ verdict: string; passed: number; total: number; language: string }[]>("dsaDrill.showHistory", "add-two");
   // add-two ran three times above: 2/2 AC, then (after the test update) 3/3 AC ... newest first
   assert.ok(runs.length >= 2, JSON.stringify(runs));
-  assert.deepEqual({ ...runs[0], at: undefined, maxTimeMs: undefined, hash: undefined }, { verdict: "AC", passed: 3, total: 3, language: "python", at: undefined, maxTimeMs: undefined, hash: undefined });
+  assert.deepEqual({ ...runs[0], at: undefined, maxTimeMs: undefined, hash: undefined, peakMb: undefined }, { verdict: "AC", passed: 3, total: 3, language: "python", at: undefined, maxTimeMs: undefined, hash: undefined, peakMb: undefined });
   assert.ok(api.history.runs(JSON.parse(await read("max-pair/.data/.source.json")).repo, "max-pair").some((r: { verdict: string }) => r.verdict === "WA"));
   await vscode.commands.executeCommand("workbench.action.closeQuickOpen");
+});
+
+it("hints open one at a time, are remembered, and get a CodeLens", async () => {
+  type Shown = { title: string; shown: string[]; total: number };
+  const first = await vscode.commands.executeCommand<Shown>("dsaDrill.showHints", "add-two");
+  assert.deepEqual(first, { title: "Add Two", shown: [], total: 2 }, "nothing opened yet");
+  assert.deepEqual((await vscode.commands.executeCommand<Shown>("dsaDrill.hintAction", "next")).shown, ["Read both numbers"]);
+  assert.deepEqual((await vscode.commands.executeCommand<Shown>("dsaDrill.hintAction", "next")).shown, ["Read both numbers", "Add them"]);
+  assert.equal((await vscode.commands.executeCommand<Shown>("dsaDrill.hintAction", "next")).shown.length, 2, "can't go past the last");
+  const again = await vscode.commands.executeCommand<Shown>("dsaDrill.showHints", "add-two");
+  assert.equal(again.shown.length, 2, "remembered");
+  assert.deepEqual((await vscode.commands.executeCommand<Shown>("dsaDrill.hintAction", "reset")).shown, []);
+  assert.ok(!(await fs.readdir(path.join(ws(), "add-two"))).includes("hints.md"), "hints aren't downloaded");
+
+  const doc = await open("add-two/solution.py");
+  const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>("vscode.executeCodeLensProvider", doc.uri);
+  assert.deepEqual(lenses.map((l) => l.command?.title), ["▶ Run Tests", "Run Custom Input", "Stress Test", "Hints (2)"]);
+  const none = await vscode.commands.executeCommand<Shown | undefined>("dsaDrill.showHints", "max-pair");
+  assert.equal(none, undefined, "max-pair has no hints");
+});
+
+it("stats count solved problems and today's runs", async () => {
+  const s = await vscode.commands.executeCommand<{ solved: number; total: number; streak: { current: number; activeToday: boolean }; runs: number; byDifficulty: { name: string }[] }>(
+    "dsaDrill.showStats",
+  );
+  assert.equal(s.total, 2);
+  assert.ok(s.runs >= 3, `runs above were recorded: ${s.runs}`);
+  assert.equal(s.streak.current, 1);
+  assert.equal(s.streak.activeToday, true);
+  assert.deepEqual(s.byDifficulty.map((d) => d.name), ["Easy", "Medium"]);
+});
+
+it("memory: MLE over meta.json's limit, peak memory in the panel", async () => {
+  const dir = path.join(ws(), "memory");
+  await fs.mkdir(path.join(dir, ".data"), { recursive: true });
+  await fs.writeFile(path.join(dir, "meta.json"), '{"memoryLimit": 64}');
+  await fs.writeFile(path.join(dir, ".data", "1.in"), "8\n");
+  await fs.writeFile(path.join(dir, ".data", "1.out"), "8\n");
+  await fs.writeFile(path.join(dir, ".data", "2.in"), "200\n");
+  await fs.writeFile(path.join(dir, ".data", "2.out"), "200\n");
+  await fs.writeFile(
+    path.join(dir, "solution.cpp"),
+    "#include <bits/stdc++.h>\nint main(){ int mb; std::cin >> mb; std::vector<char> v((size_t)mb << 20, 1); long long s = 0;\n" +
+      "for (size_t i = 0; i < v.size(); i += 4096) s += v[i]; std::cout << s / 256 << \"\\n\"; }\n",
+  );
+  const doc = await open("memory/solution.cpp");
+  const r = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", doc.uri);
+  assert.deepEqual(r.cases.map((c) => c.verdict), ["AC", "MLE"]);
+  assert.equal(r.memoryLimitMb, 64);
+  const api = vscode.extensions.all.find((e) => e.packageJSON.name === "dsa-drill")!.exports;
+  let drawn: { header: string; cases: string } | undefined;
+  for (let i = 0; i < 50; i++) {
+    drawn = api._test.rendered();
+    if (drawn?.cases.includes("MLE")) break;
+    await new Promise((res) => setTimeout(res, 100));
+  }
+  assert.match(drawn?.header ?? "", /limit 2s, 64 MB · slowest \d+ ms · peak \d+(\.\d)? MB/);
+  assert.match(drawn?.cases ?? "", /MLE[\s\S]*Case 2[\s\S]*64 MB memory limit/);
+});
+
+it("a problem's checker accepts any right answer", async () => {
+  const dir = path.join(ws(), "checked");
+  await fs.mkdir(path.join(dir, ".data"), { recursive: true });
+  await fs.writeFile(path.join(dir, ".data", "1.in"), "10\n");
+  await fs.writeFile(path.join(dir, ".data", "1.out"), "3 7\n");
+  // any two positive numbers that add up to n
+  await fs.writeFile(
+    path.join(dir, ".data", "checker.py"),
+    "import sys\nn = int(open(sys.argv[1]).read())\nout = open(sys.argv[2]).read().split()\n" +
+      "ok = len(out) == 2 and all(x.isdigit() and int(x) > 0 for x in out) and sum(map(int, out)) == n\n" +
+      "print('' if ok else 'not two positive numbers adding up to %d' % n)\nsys.exit(0 if ok else 1)\n",
+  );
+  await fs.writeFile(path.join(dir, "solution.py"), "n = int(input())\nprint(1, n - 1)\n");
+  const doc = await open("checked/solution.py");
+  const ok = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", doc.uri);
+  assert.equal(ok.cases[0].verdict, "AC", "1 9 differs from the .out but is right");
+  assert.equal(ok.checker, "checker.py");
+  await fs.writeFile(path.join(dir, "solution.py"), "n = int(input())\nprint(0, n)\n");
+  const bad = await vscode.commands.executeCommand<JudgeReport>("dsaDrill.runTests", doc.uri);
+  assert.equal(bad.cases[0].verdict, "WA");
+  assert.match(bad.cases[0].message ?? "", /not two positive numbers adding up to 10/);
 });
 
 it("a bad repo setting shows a message in the sidebar instead of failing", async () => {

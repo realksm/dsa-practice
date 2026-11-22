@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Memory limit: `memoryLimit` in meta.json is now enforced, with a new MLE verdict. Peak memory shows
+  per test in the results panel, in Custom Input and in the run history. Measured by a small helper
+  built once with g++ (a Job Object on Windows); Java's heap is capped with `-Xmx`.
+- Custom checkers: a problem's `.data/checker.cpp` / `checker.py` decides when several answers are
+  right, in Run Tests and Stress Test alike.
+- Hints: `hints.md`, opened one at a time from a CodeLens or the sidebar; how far you got is remembered.
+- Stats view: solved per difficulty and tag, daily streak, a year of activity.
+- Java runs with a small starting heap and the serial GC (about 50 MB instead of 350 MB, same speed).
+- Python runs the real interpreter instead of a launcher (Windows Store alias, `py`): faster per test,
+  and Stop / the time limit now end it.
+- C++ is linked statically on Windows, so a different MinGW's DLLs on the PATH can't crash it.
+- Authoring: `npm run new <slug> -- --checker --hints`; `npm run build` checks the checker against
+  the reference and stress-tests through it.
+
 ## 0.2.0 (2026-11-22)
 
 - Stress Test: compare your solution with a brute force on random inputs from a generator; the first

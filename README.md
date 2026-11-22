@@ -22,8 +22,11 @@ decimals are accepted within 1e-6.
 ```
 problems/<slug>/
   problem.md          statement
-  meta.json           { "title", "difficulty": "easy|medium|hard", "tags", "timeLimit" (seconds) }
+  meta.json           { "title", "difficulty": "easy|medium|hard", "tags", "timeLimit" (seconds),
+                        "memoryLimit" (MB) }
   .data/01.in 01.out  tests; every .out is generated from a reference solution
+  .data/checker.cpp   optional: for problems with several right answers (see below)
+  hints.md            optional: hints, one "## " heading each, shown one at a time
   starters/           optional: solution.cpp, Main.java, solution.py
 index.json            generated list of all problems, read by the extension
 ```
@@ -35,6 +38,8 @@ Commands run from the repo root after `npm ci` in `extension/`:
 
 ```
 npm run new <slug>            create problems/<slug>/ and references/<slug>/ref.cpp
+npm run new <slug> -- --checker --hints
+                              ... with a checker and a hints.md to fill in
 npm run build                 run each reference on every .in, write the .out files,
                               check the time limit, validate, rebuild index.json
 npm run build -- <slug>       only that problem
@@ -42,6 +47,14 @@ npm run build -- --stress     also compare ref with references/<slug>/naive.* on
                               200 random inputs from gen.* (seed = argv[1])
 npm run check                 what CI runs: every problem is valid and index.json is current
 ```
+
+A **checker** (`.data/checker.cpp`, or `checker.py`) is run as `checker <input> <output> <answer>`,
+where the answer is the reference's `.out`. It exits 0 to accept and 1 to reject, printing why;
+any other exit means the checker is broken. `npm run build` checks that it accepts the reference's
+own outputs, and `--stress` compares naive with ref through it.
+
+**Hints** (`hints.md`) are fetched only when someone asks for them: they aren't downloaded with the
+problem, and editing them doesn't mark the tests as changed.
 
 Then commit and push. The extension shows new problems on its next refresh (raw GitHub files
 can take about 5 minutes to update).

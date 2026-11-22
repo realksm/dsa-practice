@@ -1,7 +1,10 @@
 /** Paths and checks shared by the authoring scripts (new, build, check). */
 import { promises as fs } from "fs";
 import * as path from "path";
+import { CHECKER_STEM } from "../extension/src/judge/checker";
+import { languageOf } from "../extension/src/judge/languages";
 import { DATA_DIR, type ProblemMeta } from "../extension/src/judge/tests";
+import { HINTS_FILE, parseHints } from "../extension/src/problems/hints";
 import { isValidSlug, PROBLEMS_DIR } from "../extension/src/problems/indexFile";
 
 /** Compiled scripts live in authoring/out/authoring/, so the repo root is three levels up. */
@@ -65,6 +68,14 @@ export async function validateProblem(slug: string): Promise<string[]> {
     if (meta) errors.push(...validateMeta(meta).map((m) => `meta.json: ${m}`));
   }
 
+  if (top.includes(HINTS_FILE)) {
+    const text = await fs.readFile(path.join(dir, HINTS_FILE), "utf8");
+    const hints = parseHints(text);
+    if (!hints.length) errors.push(`${HINTS_FILE} has no hints: start each one with a "## " heading`);
+    if (hints.some((h) => !h.body)) errors.push(`${HINTS_FILE} has a hint with nothing under its heading`);
+    if (text.includes("TODO")) errors.push(`${HINTS_FILE} still contains TODO`);
+  }
+
   const dataDir = path.join(dir, DATA_DIR);
   const data = (await exists(dataDir)) ? await fs.readdir(dataDir) : [];
   const ins = data.filter((f) => f.endsWith(".in"));
@@ -74,12 +85,22 @@ export async function validateProblem(slug: string): Promise<string[]> {
     if (!data.includes(stem + ".out")) errors.push(`${DATA_DIR}/${f} has no ${stem}.out (run npm run build)`);
     if (!(await fs.readFile(path.join(dataDir, f), "utf8")).trim()) errors.push(`${DATA_DIR}/${f} is empty`);
   }
+  const checkers = data.filter(isCheckerFile);
+  if (checkers.length > 1) errors.push(`${DATA_DIR}/ has several checkers (${checkers.join(", ")}); keep one`);
+  for (const f of checkers) {
+    if ((await fs.readFile(path.join(dataDir, f), "utf8")).includes("TODO")) errors.push(`${DATA_DIR}/${f} still contains TODO`);
+  }
   for (const f of data) {
     if (f.endsWith(".out") && !data.includes(f.slice(0, -4) + ".in")) errors.push(`${DATA_DIR}/${f} has no matching .in`);
-    else if (!f.endsWith(".in") && !f.endsWith(".out")) errors.push(`${DATA_DIR}/${f}: only .in and .out files go in ${DATA_DIR}/`);
+    else if (!f.endsWith(".in") && !f.endsWith(".out") && !isCheckerFile(f)) {
+      errors.push(`${DATA_DIR}/${f}: only .in and .out files (and a checker.cpp / checker.py) go in ${DATA_DIR}/`);
+    }
   }
   return errors;
 }
+
+/** .data/checker.cpp, checker.py or checker.java. */
+export const isCheckerFile = (f: string) => path.parse(f).name.toLowerCase() === CHECKER_STEM && !!languageOf(f);
 
 export function validateMeta(meta: ProblemMeta): string[] {
   const errors: string[] = [];

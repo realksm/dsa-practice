@@ -23,7 +23,9 @@ import {
 } from "./judge";
 import { HistoryStore, JsonFileStore, summariseRun } from "./problems/history";
 import { readSourceInfo } from "./problems/install";
+import { HINTS_KEY } from "./problems/hints";
 import { SOLVED_KEY, SolvedStore } from "./problems/solved";
+import { ActivityStore } from "./problems/stats";
 import { registerProblems } from "./problems/view";
 import { emptyState, ResultsPanel } from "./ui/resultsPanel";
 
@@ -53,6 +55,9 @@ function timeMultipliers(): Partial<Record<LanguageId, number>> {
   return Object.fromEntries(Object.entries(v).filter(([, n]) => typeof n === "number" && n > 0)) as Partial<Record<LanguageId, number>>;
 }
 
+/** The limits a run used, for the results panel. */
+const limitsOf = (r: JudgeReport) => ({ timeLimitMs: r.timeLimitMs, memoryLimitMb: r.memoryLimitMb, memoryMeasured: r.memoryMeasured, checker: r.checker });
+
 const toDiagnostic = (m: CompileMessage, message = m.message) => {
   const range = new vscode.Range(m.line - 1, Math.max(0, m.column - 1), m.line - 1, Number.MAX_SAFE_INTEGER);
   const d = new vscode.Diagnostic(range, message, m.severity === "warning" ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error);
@@ -67,10 +72,12 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(diagnostics, status);
 
   const solved = new SolvedStore(ctx.globalState);
-  ctx.globalState.setKeysForSync([SOLVED_KEY]); // solved problems follow the user via Settings Sync
+  ctx.globalState.setKeysForSync([SOLVED_KEY, HINTS_KEY]); // solved problems and opened hints follow the user via Settings Sync
   // its own file, not globalState: see JsonFileStore
-  const history = new HistoryStore(new JsonFileStore(path.join(ctx.globalStorageUri.fsPath, "history.json")));
-  const problems = registerProblems(ctx, solved, history);
+  const historyFile = new JsonFileStore(path.join(ctx.globalStorageUri.fsPath, "history.json"));
+  const history = new HistoryStore(historyFile);
+  const activity = new ActivityStore(historyFile, () => history.allRuns());
+  const problems = registerProblems(ctx, solved, history, activity);
 
   /** Remember a finished Run Tests of a downloaded problem. */
   async function recordRun(file: string, report: JudgeReport) {
@@ -78,6 +85,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     const language = languageOf(file);
     const summary = summariseRun(report.cases, report.total, !!report.compileError);
     if (!info?.repo || !info.slug || !language || !summary) return;
+    await activity.record(summary.verdict === "AC"); // before history.add: its listeners redraw the stats
     await history.add(info.repo, info.slug, { at: new Date().toISOString(), language, ...summary, hash: info.hash });
   }
 
@@ -191,7 +199,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (running !== ac) return report; // a newer run took over
       if (report.compileError) {
         showCompilerOutput(file, report.compileError);
-        panel.update({ phase: "compileError", compileError: report.compileError, total: report.total, timeLimitMs: report.timeLimitMs });
+        panel.update({ phase: "compileError", compileError: report.compileError, total: report.total, ...limitsOf(report) });
         setStatus("$(error) Compile error", "Click to see the error", "bad");
         await recordRun(file, report).catch((e) => console.error("DSA Drill: couldn't record the run:", e));
       } else {
@@ -199,7 +207,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (report.compileWarnings) showCompilerOutput(file, report.compileWarnings);
         showRuntimeError(file, report.cases.find((c) => c.verdict === "RE"));
         if (!cancelled) await recordRun(file, report).catch((e) => console.error("DSA Drill: couldn't record the run:", e));
-        panel.update({ phase: cancelled ? "cancelled" : "done", cases: report.cases, total: report.total, passed: report.passed, timeLimitMs: report.timeLimitMs });
+        panel.update({ phase: cancelled ? "cancelled" : "done", cases: report.cases, total: report.total, passed: report.passed, ...limitsOf(report) });
         const failed = report.cases.some((c) => c.verdict !== "AC" && c.verdict !== "NO_EXPECTED");
         if (cancelled) setStatus(`$(debug-stop) ${report.passed}/${report.total}`, "Stopped");
         else if (failed) setStatus(`$(error) ${report.passed}/${report.total} passed`, "Click to see which cases failed", "bad");
@@ -364,7 +372,10 @@ export function activate(ctx: vscode.ExtensionContext) {
           total: 1,
           passed: 0,
           timeLimitMs: outcome.timeLimitMs,
-          note: `Stress test: ${r.verdict} on seed ${outcome.seed} (expected = brute's output). Saved as ${DATA_DIR}/${path.basename(saved)} and .out, so Run Tests includes it from now on.`,
+          memoryLimitMb: outcome.memoryLimitMb,
+          memoryMeasured: outcome.memoryMeasured,
+          checker: outcome.checker,
+          note: `Stress test: ${r.verdict} on seed ${outcome.seed} (expected = brute's output${outcome.checker ? ", judged by the checker" : ""}). Saved as ${DATA_DIR}/${path.basename(saved)} and .out, so Run Tests includes it from now on.`,
         });
         setStatus(`$(error) Stress: ${r.verdict} on seed ${outcome.seed}`, "Click to see the failing input", "bad");
         break;
@@ -395,18 +406,23 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand("dsaDrill.showResults", () => panel.show()),
     vscode.languages.registerCodeLensProvider(SELECTOR, {
       onDidChangeCodeLenses: lensEmitter.event,
-      provideCodeLenses(doc) {
+      async provideCodeLenses(doc) {
         if (!vscode.workspace.getConfiguration("dsaDrill").get("codeLens", true)) return [];
         if (!isSolutionFile(doc.uri.fsPath)) return [];
         const top = new vscode.Range(0, 0, 0, 0);
-        return [
+        const lenses = [
           new vscode.CodeLens(top, { title: "▶ Run Tests", command: "dsaDrill.runTests", arguments: [doc.uri] }),
           new vscode.CodeLens(top, { title: "Run Custom Input", command: "dsaDrill.runCustomInput", arguments: [doc.uri] }),
           new vscode.CodeLens(top, { title: "Stress Test", command: "dsaDrill.stressTest", arguments: [doc.uri] }),
         ];
+        const info = await readSourceInfo(path.dirname(doc.uri.fsPath));
+        const entry = info && info.repo === problems.source?.label ? problems.index?.problems.find((p) => p.slug === info.slug) : undefined;
+        if (entry?.hints) lenses.push(new vscode.CodeLens(top, { title: `Hints (${entry.hints})`, command: "dsaDrill.showHints", arguments: [entry.slug] }));
+        return lenses;
       },
     }),
     vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration("dsaDrill") && lensEmitter.fire()),
+    problems.onDidChangeTreeData(() => lensEmitter.fire()), // the index (and its hint counts) arrived
     vscode.workspace.onDidChangeTextDocument((e) => {
       // compile errors go stale as soon as the file is edited
       if (diagnostics.has(e.document.uri)) diagnostics.delete(e.document.uri);
@@ -426,6 +442,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       filter: () => problems.filter,
       diagnostics: (file: string) => diagnostics.get(vscode.Uri.file(file))?.map((d) => ({ line: d.range.start.line + 1, message: d.message, severity: d.severity })) ?? [],
       history,
+      activity,
     },
   };
 }

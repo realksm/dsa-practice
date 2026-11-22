@@ -16,17 +16,19 @@
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-  const LABEL = { AC: "PASS", WA: "WA", TLE: "TLE", RE: "RE", OLE: "OLE", NO_EXPECTED: "RAN" };
+  const LABEL = { AC: "PASS", WA: "WA", TLE: "TLE", MLE: "MLE", RE: "RE", OLE: "OLE", NO_EXPECTED: "RAN" };
   const TITLE = {
     AC: "Accepted",
     WA: "Wrong answer",
     TLE: "Time limit exceeded",
+    MLE: "Memory limit exceeded",
     RE: "Runtime error",
     OLE: "Output limit exceeded",
     NO_EXPECTED: "Ran, no expected answer to compare with",
   };
 
   const ms = (t) => `${Math.round(t)} ms`;
+  const mb = (b) => `${(b / 1048576).toFixed(b < 10 * 1048576 ? 1 : 0)} MB`;
 
   /** A <pre> with line numbers; `bad` = 1-based line to highlight. */
   function block(label, text, bad, cls = "") {
@@ -41,16 +43,18 @@
     return `<div class="block ${cls}"><div class="label">${label}</div><pre>${body}</pre></div>`;
   }
 
-  function details(c) {
+  function details(c, s) {
     let h = "";
     if (c.message) h += `<p class="msg">${esc(c.message)}</p>`;
     if (c.verdict === "WA" && c.diff) {
       h += `<p class="msg">First difference on line ${c.diff.line}: expected <code>${esc(c.diff.expected)}</code>, got <code>${esc(c.diff.got)}</code></p>`;
     }
     if (c.verdict === "TLE") h += `<p class="msg">Stopped after ${ms(c.timeMs)}. Look for an infinite loop or a slower-than-needed algorithm.</p>`;
+    if (c.verdict === "MLE") h += `<p class="msg">Look for arrays sized far beyond the constraints, or a recursion / container that keeps growing.</p>`;
+    const expLabel = s && s.checker ? "One right answer" : "Expected";
     h += block("Input", c.input);
     if (c.verdict !== "NO_EXPECTED" && c.expected != null) {
-      h += `<div class="pair">${block("Expected", c.expected, c.diff?.line, "exp")}${block("Your output", c.output, c.diff?.line, "got")}</div>`;
+      h += `<div class="pair">${block(expLabel, c.expected, c.diff?.line, "exp")}${block("Your output", c.output, c.diff?.line, "got")}</div>`;
     } else {
       h += block("Your output", c.output);
     }
@@ -89,7 +93,17 @@
     }
     const busy = s.phase === "compiling" || s.phase === "running";
     const slowest = s.cases.length ? Math.max(...s.cases.map((c) => c.timeMs)) : 0;
-    const meta = s.timeLimitMs ? `<span class="muted">limit ${s.timeLimitMs / 1000}s${slowest ? ` · slowest ${ms(slowest)}` : ""}</span>` : "";
+    const peak = Math.max(0, ...s.cases.map((c) => c.memoryBytes || 0));
+    const parts = [];
+    if (s.timeLimitMs) parts.push(`limit ${s.timeLimitMs / 1000}s${s.memoryLimitMb ? `, ${s.memoryLimitMb} MB` : ""}`);
+    if (slowest) parts.push(`slowest ${ms(slowest)}`);
+    if (peak) parts.push(`peak ${mb(peak)}`);
+    if (s.checker) parts.push("checked by the problem's checker");
+    const unchecked =
+      s.memoryLimitMb && s.memoryMeasured === false
+        ? ` <span class="warn" title="Memory is measured by a small helper built with g++. Install g++ (or set dsaDrill.compilers.cpp) to check the memory limit.">memory not checked (needs g++)</span>`
+        : "";
+    const meta = parts.length ? `<span class="muted">${parts.join(" · ")}</span>${unchecked}` : "";
     const btn = s.file
       ? busy
         ? `<button id="stop" class="secondary">Stop</button>`
@@ -114,9 +128,10 @@
           <span class="verdict">${LABEL[c.verdict]}</span>
           <span class="name">Case ${esc(c.name)}</span>
           <span class="grow"></span>
+          ${c.memoryBytes != null ? `<span class="muted mem">${mb(c.memoryBytes)}</span>` : ""}
           <span class="muted">${c.verdict === "TLE" ? "&gt; " : ""}${ms(c.timeMs)}</span>
         </div>
-        ${open ? `<div class="case-body">${details(c)}</div>` : ""}
+        ${open ? `<div class="case-body">${details(c, s)}</div>` : ""}
       </div>`;
     }
     for (let i = s.cases.length; i < s.total && (s.phase === "running" || s.phase === "compiling"); i++) {
@@ -132,7 +147,7 @@
     if (c.compileError) return `<pre class="compile">${esc(c.compileError)}</pre>`;
     const r = c.result;
     if (!r) return "";
-    let h = `<div class="row"><span class="verdict-inline ${r.verdict}">${r.verdict === "NO_EXPECTED" ? "OK" : LABEL[r.verdict]}</span><span class="muted">${ms(r.timeMs)}</span></div>`;
+    let h = `<div class="row"><span class="verdict-inline ${r.verdict}">${r.verdict === "NO_EXPECTED" ? "OK" : LABEL[r.verdict]}</span><span class="muted">${ms(r.timeMs)}${r.memoryBytes != null ? ` · ${mb(r.memoryBytes)}` : ""}</span></div>`;
     if (r.message) h += `<p class="msg">${esc(r.message)}</p>`;
     h += block("Output", r.output);
     if (r.stderr && r.stderr.trim()) h += block(r.verdict === "RE" ? "Error output" : "Debug output (stderr)", r.stderr, undefined, "err");

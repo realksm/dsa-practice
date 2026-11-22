@@ -5,3 +5,5 @@ export * from "./runner";
 export * from "./tests";
 export * from "./cache";
 export * from "./stress";
+export * from "./checker";
+export * from "./memory";

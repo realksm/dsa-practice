@@ -118,6 +118,18 @@
         "title": "Show Run History",
         "category": "DSA Drill",
         "icon": "$(history)"
+      },
+      {
+        "command": "dsaDrill.showHints",
+        "title": "Show Hints",
+        "category": "DSA Drill",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "dsaDrill.showStats",
+        "title": "Show Stats",
+        "category": "DSA Drill",
+        "icon": "$(graph)"
       }
     ],
     "viewsContainers": {
@@ -153,12 +165,17 @@
           "command": "dsaDrill.refreshProblems",
           "when": "view == dsaDrill.problems",
           "group": "navigation@2"
+        },
+        {
+          "command": "dsaDrill.showStats",
+          "when": "view == dsaDrill.problems",
+          "group": "navigation@0"
         }
       ],
       "view/item/context": [
         {
           "command": "dsaDrill.updateProblem",
-          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.outdated(\\.solved)?$/",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.outdated(\\.solved)?(\\.hints)?$/",
           "group": "inline"
         },
         {
@@ -168,18 +185,23 @@
         },
         {
           "command": "dsaDrill.updateProblem",
-          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.(local|outdated)(\\.solved)?$/",
+          "when": "view == dsaDrill.problems && viewItem =~ /^problem\\.(local|outdated)(\\.solved)?(\\.hints)?$/",
           "group": "2_update"
         },
         {
           "command": "dsaDrill.markUnsolved",
-          "when": "view == dsaDrill.problems && viewItem =~ /\\.solved$/",
+          "when": "view == dsaDrill.problems && viewItem =~ /\\.solved(\\.hints)?$/",
           "group": "3_solved"
         },
         {
           "command": "dsaDrill.showHistory",
           "when": "view == dsaDrill.problems && viewItem =~ /^problem/",
           "group": "3_solved@0"
+        },
+        {
+          "command": "dsaDrill.showHints",
+          "when": "view == dsaDrill.problems && viewItem =~ /\\.hints$/",
+          "group": "1_open@1"
         }
       ],
       "editor/title/run": [

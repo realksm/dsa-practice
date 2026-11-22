@@ -7,13 +7,16 @@
  *   npm run build -- --stress 1000    ... on 1000 inputs
  *
  * For each problem it compiles references/<slug>/ref.* , runs it on every .data/*.in, writes
- * the matching .out, and checks that the reference fits in meta.json's timeLimit. Then it
+ * the matching .out, and checks that the reference fits in meta.json's timeLimit. A problem with a
+ * .data/checker.* must accept the reference's own outputs; --stress then compares naive with ref
+ * through the checker instead of token by token. Then it
  * validates the folder (the same checks CI runs) and rewrites index.json.
  * Nothing is written to index.json if anything failed.
  */
 import { promises as fs } from "fs";
 import * as os from "os";
 import * as path from "path";
+import { Checker, CheckerError, findChecker } from "../extension/src/judge/checker";
 import { outputsMatch } from "../extension/src/judge/compare";
 import { languageOf, prepare, type Program } from "../extension/src/judge/languages";
 import { describeExit, runProcess, type RunResult } from "../extension/src/judge/runner";
@@ -108,8 +111,13 @@ async function buildProblem(slug: string, stressRuns: number, totals: Totals): P
   if (!ins.length) throw new Failure(`no tests: add ${DATA_DIR}/01.in, 02.in, ...`);
 
   const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "dsa-drill-build-"));
+  let checker: Checker | undefined;
   try {
     const refProg = await compile(ref, workdir);
+    const checkerFile = await findChecker(dir).catch((e) => {
+      throw new Failure((e as Error).message);
+    });
+    if (checkerFile) checker = await Checker.create(checkerFile, await compile(checkerFile, workdir));
     let written = 0;
     let slowest = 0;
     for (const f of ins) {
@@ -125,16 +133,24 @@ async function buildProblem(slug: string, stressRuns: number, totals: Totals): P
 
       const outFile = path.join(dataDir, f.slice(0, -3) + ".out");
       const out = normalise(r.stdout);
+      if (checker) {
+        const v = await runChecker(checker, f, input, out, out);
+        if (!v.ok) throw new Failure(`the checker rejects the reference's own output on ${f}:\n${indent(v.message)}`);
+      }
       const old = await fs.readFile(outFile, "utf8").catch(() => null);
       if (old !== null && normalise(old) === out) continue;
       await fs.writeFile(outFile, out);
       written++;
       console.log(`    ${old === null ? "new    " : "CHANGED"} ${path.basename(outFile)}`);
     }
-    console.log(`    ${ins.length} tests, ${written} .out written, slowest ${Math.round(slowest)} ms (limit ${limitMs} ms)`);
+    console.log(
+      `    ${ins.length} tests, ${written} .out written, slowest ${Math.round(slowest)} ms (limit ${limitMs} ms)` +
+        (checker ? `; ${path.basename(checker.file)} accepts every reference output` : ""),
+    );
 
-    if (stressRuns > 0) await stress(slug, refDir, refProg, workdir, stressRuns, compareOpts, warn);
+    if (stressRuns > 0) await stress(slug, refDir, refProg, workdir, stressRuns, compareOpts, warn, checker);
   } finally {
+    await checker?.dispose();
     // Windows can keep a just-run .exe locked for a moment.
     await fs.rm(workdir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {});
   }
@@ -148,6 +164,7 @@ async function stress(
   runs: number,
   compareOpts: { exact?: boolean; ignoreCase?: boolean; eps?: number },
   warn: (m: string) => void,
+  checker?: Checker,
 ): Promise<void> {
   const gen = await findHelper(refDir, "gen");
   const naive = await findHelper(refDir, "naive");
@@ -165,16 +182,29 @@ async function stress(
     const [r, n] = await Promise.all([run(refProg, input, 10_000), run(naiveProg, input, 10_000)]);
     const err = failed(r, `ref on seed ${seed}`) ?? failed(n, `naive on seed ${seed}`);
     if (err) throw new Failure(err);
-    if (!outputsMatch(r.stdout, n.stdout, compareOpts)) {
+    // with a checker, naive's output must be accepted against ref's (they may differ and both be right)
+    const verdict = checker ? await runChecker(checker, `seed ${seed}`, input, n.stdout, r.stdout) : { ok: outputsMatch(r.stdout, n.stdout, compareOpts) };
+    if (!verdict.ok) {
       const saved = path.join(refDir, `stress-${seed}.in`);
       await fs.writeFile(saved, input);
       throw new Failure(
         `ref and naive disagree on seed ${seed} (input saved to references/${slug}/${path.basename(saved)}):\n` +
-          `    input:\n${indent(preview(input))}\n    ref:\n${indent(preview(r.stdout))}\n    naive:\n${indent(preview(n.stdout))}`,
+          `    input:\n${indent(preview(input))}\n    ref:\n${indent(preview(r.stdout))}\n    naive:\n${indent(preview(n.stdout))}` +
+          ("message" in verdict ? `\n    checker:\n${indent(verdict.message)}` : ""),
       );
     }
   }
   console.log(`    stress: ref and naive agree on ${runs} random inputs`);
+}
+
+/** Run the checker; a broken checker is a build failure, not an exception. */
+async function runChecker(checker: Checker, what: string, input: string, output: string, answer: string) {
+  try {
+    return await checker.check(what, input, output, answer);
+  } catch (e) {
+    if (e instanceof CheckerError) throw new Failure(e.message.replace(" This is a bug in the problem, not your solution.", ""));
+    throw e;
+  }
 }
 
 async function main() {

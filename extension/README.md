@@ -15,8 +15,13 @@ Programs read standard input and print to standard output, as on Codeforces or A
 
 ## Features
 
-- **Results panel:** PASS / WA / TLE / RE for every test, with time. A failing test shows its input,
-  the expected output, your output and the first line that differs.
+- **Results panel:** PASS / WA / TLE / MLE / RE for every test, with time and peak memory. A failing
+  test shows its input, the expected output, your output and the first line that differs.
+- **Hints:** problems with hints get a **Hints** link above the code (and right-click → **Show Hints**
+  in the sidebar). They open one at a time, from a nudge to the key idea, and the panel remembers how
+  far you got.
+- **Stats:** the graph button in the sidebar's title shows problems solved per difficulty and tag,
+  your daily streak and a year of activity.
 - **Run Custom Input:** run your program on input you type, without comparing.
 - **Compile errors and warnings** go to the Problems panel, on the right line. When a Python or Java
   solution crashes, the line it crashed on is marked too.
@@ -40,7 +45,13 @@ Programs read standard input and print to standard output, as on Codeforces or A
 - Each problem has a time limit per test (in its `meta.json`), set for C++. Java gets twice that by
   default (JVM startup); Python gets the same. A problem can change this with `timeMultipliers` in its
   `meta.json`, and you can with the `dsaDrill.timeMultipliers` setting.
-- C++ is compiled with `-std=c++17 -O2`, with a 256 MB stack on Windows.
+- A problem's `meta.json` can set a memory limit (`memoryLimit`, in MB). Going over it is **MLE**.
+  C++ and Python count the whole program; Java counts its heap (`-Xmx`). Memory is measured by a
+  small helper that DSA Drill builds once with `g++`; without `g++` it isn't measured and the panel
+  says the limit wasn't checked.
+- Problems where several answers are right come with a **checker** that decides; the panel then
+  shows the reference answer as "One right answer" and the checker's reason when it rejects yours.
+- C++ is compiled with `-std=c++17 -O2`, with a 256 MB stack and static linking on Windows.
 
 ## Settings
 
