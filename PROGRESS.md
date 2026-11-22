@@ -15,7 +15,7 @@ until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now s
 | 3. Problems from GitHub (sidebar, download, starters, update) | ✅ Done (tested against a local fixture repo; nothing pushed to GitHub yet) |
 | 4. Authoring scripts + CI, port existing problems | ✅ Done 2026-11-22, pushed to GitHub (first commit 147ab9f) |
 | 5. Polish (solved tracking, tags, publish) | ✅ Done 2026-11-22: solved tracking, filter, `.vsix` released as v0.1.0 on GitHub (Marketplace: not planned for now) |
-| 6. Quick wins + stress test + run history | ✅ Done 2026-11-22, committed (90670ea); version 0.2.0 packaged, not pushed or released yet |
+| 6. Quick wins + stress test + run history | ✅ Done 2026-11-22 (90670ea), released as v0.2.0 on GitHub |
 
 The problems repo is **`realksm/dsa-practice`** (the default for `dsaDrill.repo`), public, branch `main`.
 Pushed 2026-11-22. Checked the same day with the extension's own code (sourceFor + installProblem, from Node):
@@ -257,15 +257,15 @@ index. `memoryLimit` is stored but not used yet.
 
 - **v0.1.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.1.0, with
   `dsa-drill-0.1.0.vsix` attached (SHA-256 5d43bf0e...070fcf). CI (`check`) green on every push so far.
+- **v0.2.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.2.0, with
+  `dsa-drill-0.2.0.vsix` attached (SHA-256 3d5a29ec...c097858). CI green on main (1d6dc35) and the tag.
 - New release: bump `version` in extension/package.json + CHANGELOG.md, `npm run package` in extension/,
   commit, `git tag -a vX.Y.Z`, push with the tag, then
   `gh release create vX.Y.Z extension/dsa-drill-X.Y.Z.vsix --notes-file <notes>` (gh is installed and logged in).
 
 ## Next steps
 
-0. Phase 6 is committed and 0.2.0 is bumped and packaged (`dsa-drill-0.2.0.vsix`, SHA-256 3d5a29ec...c097858;
-   all 68 unit + 20 VS Code tests passed). Still to do: try Stress Test and the history by hand (F5),
-   then tag v0.2.0, push, and `gh release create`. The stray `max-subarray/` and `two-sum/` at the repo root
+0. v0.2.0 is released. Still to do: try Stress Test and the history by hand (F5). The stray `max-subarray/` and `two-sum/` at the repo root
    are downloaded copies from the GitHub check, not part of the repo.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
