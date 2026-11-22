@@ -308,8 +308,7 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
 
 ## Next steps
 
-0. v0.3.0 is released. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history. The stray `max-subarray/` and `two-sum/` at the repo root
-   are downloaded copies from the GitHub check, not part of the repo.
+0. v0.3.0 is released. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
