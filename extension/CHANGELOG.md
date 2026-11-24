@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 (2026-11-24)
+
+- Linux and Mac: C++ (and every other solution run under the memory helper) now gets a 256 MB stack,
+  like Windows and the online judges. Before, deep recursion crashed at the 8 MB default.
+
 ## 0.3.0 (2026-11-22)
 
 - Memory limit: `memoryLimit` in meta.json is now enforced, with a new MLE verdict. Peak memory shows
