@@ -7,6 +7,8 @@
  *   helper (time limit, Stop) kills the job.
  * - Linux / Mac: the peak is the child's max resident set (wait4). Over the limit = MLE afterwards;
  *   the time limit stops a runaway. On Linux the child dies with the helper (PR_SET_PDEATHSIG).
+ *   The helper also raises the stack limit to 256 MB (or the hard limit), as Windows does with a
+ *   linker flag.
  *
  * Without g++ nothing is measured and the limit isn't checked (JudgeReport.memoryChecked = false).
  * Java gets -Xmx<limit>m instead of a hard cap on the whole JVM (its own overhead would count).
@@ -135,6 +137,13 @@ int main(int argc, char** argv) {
 #ifdef __linux__
     prctl(PR_SET_PDEATHSIG, SIGKILL);
 #endif
+    /* 256 MB stack like the judges (the default is 8 MB); exec keeps it. Capped at the hard limit. */
+    struct rlimit st;
+    if (getrlimit(RLIMIT_STACK, &st) == 0) {
+      rlim_t want = (rlim_t)256 * 1024 * 1024;
+      if (st.rlim_max != RLIM_INFINITY && st.rlim_max < want) want = st.rlim_max;
+      if (st.rlim_cur != RLIM_INFINITY && st.rlim_cur < want) { st.rlim_cur = want; setrlimit(RLIMIT_STACK, &st); }
+    }
     execvp(argv[3], argv + 3);
     char buf[64];
     sprintf(buf, "spawn_error %d\n", errno);

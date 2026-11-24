@@ -1,4 +1,4 @@
-# Every push: each problem has problem.md, valid meta.json and .in/.out pairs, and index.json
+# Every push. problems: each problem has problem.md, valid meta.json and .in/.out pairs, and index.json
 # matches problems/. Needs no compilers: expected outputs are generated locally by npm run build.
 name: check
 
@@ -19,3 +19,31 @@ jobs:
       - run: npm ci
         working-directory: extension
       - run: npm run check
+
+  # The extension's unit tests (node:test) with real compilers. Linux covers the POSIX memwatch path,
+  # which is otherwise only tried on Windows by hand. Tests whose compiler is missing are skipped.
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: g++ --version
+      - run: npm ci
+        working-directory: extension
+      - run: npm test
+        working-directory: extension

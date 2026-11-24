@@ -75,8 +75,9 @@ test("C++: crash is RE with a reason", { skip: !HAS_GPP && "g++ not installed" }
   assert.equal(r.cases[0].message, "exit code 3");
 });
 
-test("C++: deep recursion works (big stack on Windows)", { skip: !HAS_GPP && "g++ not installed" }, async () => {
-  // ~80 MB of stack: crashes with Windows' default 1 MB stack, so this really tests the flag.
+test("C++: deep recursion works (256 MB stack)", { skip: !HAS_GPP && "g++ not installed" }, async () => {
+  // ~80 MB of stack: crashes with the default stack (1 MB Windows, 8 MB Linux), so this tests the
+  // linker flag on Windows and memwatch's setrlimit elsewhere.
   const src = `#include <cstdio>
 int f(int n, char* up){ char buf[256]; buf[n & 255] = up[0]; if (n == 0) return buf[0]; int r = f(n - 1, buf); return r + buf[(n * 7) & 255]; }
 int main(){ char z[1] = {0}; int n; std::scanf("%d", &n); std::printf("%d\\n", f(n, z) * 0); }`;

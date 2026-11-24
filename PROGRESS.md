@@ -1,7 +1,7 @@
 # Progress log
 
 Read with [PLAN.md](PLAN.md), which has the goal, the decisions and the full build order.
-Last updated: 2026-11-22.
+Last updated: 2026-11-24.
 
 The extension is called **DSA Drill** (package `dsa-drill`, IDs and settings `dsaDrill.*`). It was "CP Judge"
 until 2026-11-22; the folder is still `D:\cp-judge`. The old judge.py tool now sits in `legacy/` (gitignored).
@@ -183,6 +183,9 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
 
 - The compile cache keys on the solution's own text only: a change to a local header it `#include`s
   isn't noticed until the solution changes (or VS Code restarts).
+- Linux/Mac stack: memwatch raises RLIMIT_STACK to 256 MB (capped at the hard limit) in the child
+  before exec, matching Windows' linker flag. Before 2026-11-24 they kept the 8 MB default, so the
+  deep-recursion test would have failed there. Without g++ (no memwatch) Python/Java keep the default.
 - C++ crashes (segfaults) aren't mapped to a line; only Python tracebacks and Java stack traces are.
 - Not checked by eye in light/dark themes yet; only checked that it renders. The sidebar hasn't been
   looked at by eye either (its contents are checked by the tests).
@@ -314,4 +317,6 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
    `npx vsce login` + `npx vsce publish`).
 4. More problems: `npm run new <slug>` (add `-- --checker --hints` as needed), `npm run build -- --stress`, commit, push.
-   The two published problems have no hints.md yet.
+   Both published problems have hints.md (c070ada).
+5. CI `unit` job (ubuntu + windows, `npm test` with g++/Java 21/Python 3.12) added 2026-11-24, not pushed
+   yet. It's the first run of the POSIX memwatch path anywhere; check its result after the push.
