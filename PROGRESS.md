@@ -305,13 +305,17 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
   `dsa-drill-0.2.0.vsix` attached (SHA-256 3d5a29ec...c097858). CI green on main (1d6dc35) and the tag.
 - **v0.3.0** (2026-11-22): https://github.com/realksm/dsa-practice/releases/tag/v0.3.0, with
   `dsa-drill-0.3.0.vsix` attached (37 files, 84 KB, SHA-256 0c3ede08...5428ccb).
-- New release: bump `version` in extension/package.json + CHANGELOG.md, `npm run package` in extension/,
+- **v0.3.1** (2026-11-24): https://github.com/realksm/dsa-practice/releases/tag/v0.3.1, with
+  `dsa-drill-0.3.1.vsix` attached (37 files, 84 KB, SHA-256 0bcf7674...bb0807): 256 MB stack on Linux/Mac.
+  CI green on main and the tag.
+- New release: bump `version` in extension/package.json + package-lock.json (top two entries),
+  CHANGELOG.md; the old line follows. Bump `version` in extension/package.json + CHANGELOG.md, `npm run package` in extension/,
   commit, `git tag -a vX.Y.Z`, push with the tag, then
   `gh release create vX.Y.Z extension/dsa-drill-X.Y.Z.vsix --notes-file <notes>` (gh is installed and logged in).
 
 ## Next steps
 
-0. v0.3.0 is released. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history.
+0. v0.3.1 is released. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
