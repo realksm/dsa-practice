@@ -364,7 +364,7 @@ export async function symbolizeCrash(stderr: string, exe: string, source: string
     i = j;
     if (lines.length >= 12) break;
   }
-  const head = rest.replace(/\s+$/, "");
+  const head = rest.replace(/^(\s*\n)+/, "").replace(/\s+$/, "");
   return (head ? head + "\n\n" : "") + "Crashed at (innermost call first):\n" + lines.join("\n") + "\n";
 }
 

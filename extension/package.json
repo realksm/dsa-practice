@@ -361,6 +361,7 @@
     "vscode:prepublish": "npm run build",
     "test": "tsc -p . && node --test \"out/test/**/*.test.js\"",
     "test:vscode": "tsc -p . && node out/test/vscode/run.js",
+    "screenshots": "tsc -p . && node out/test/shots/run.js",
     "judge": "node out/src/cli.js",
     "index": "tsc -p . && node out/src/problems/buildIndexCli.js",
     "compile:authoring": "tsc -p ../authoring",

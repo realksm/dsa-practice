@@ -58,20 +58,31 @@ export class ResultsPanel {
   private panel?: vscode.WebviewPanel;
   private state: PanelState = emptyState();
   private customFocus = false;
+  private customText?: string;
   /** Text the webview last drew; used by the VS Code tests. */
   lastRendered?: { header: string; cases: string };
 
   constructor(private readonly extensionUri: vscode.Uri, private readonly handlers: PanelHandlers) {}
 
+  private postCustom() {
+    if (!this.customFocus && this.customText === undefined) return;
+    void this.panel?.webview.postMessage({ type: "focusCustom", input: this.customText, focus: this.customFocus });
+  }
+
   get current(): PanelState {
     return this.state;
   }
 
-  show(opts: { focusCustomInput?: boolean } = {}) {
+  /**
+   * focusCustomInput: scroll to the custom input box and put the cursor in it. customInput: an
+   * input run by a command, shown in that box (scrolled to, without taking the focus).
+   */
+  show(opts: { focusCustomInput?: boolean; customInput?: string } = {}) {
     this.customFocus = !!opts.focusCustomInput;
+    this.customText = opts.customInput;
     if (this.panel) {
       this.panel.reveal(vscode.ViewColumn.Beside, true);
-      if (this.customFocus) this.panel.webview.postMessage({ type: "focusCustom" });
+      this.postCustom();
       return;
     }
     this.panel = vscode.window.createWebviewPanel(
@@ -86,7 +97,7 @@ export class ResultsPanel {
       switch (m?.type) {
         case "ready":
           this.post();
-          if (this.customFocus) this.panel?.webview.postMessage({ type: "focusCustom" });
+          this.postCustom();
           break;
         case "rerun":
           this.handlers.rerun();

@@ -201,8 +201,12 @@
       state = m.state;
       render();
     } else if (m.type === "focusCustom") {
+      if (typeof m.input === "string") {
+        input.value = m.input;
+        save();
+      }
       $("custom").scrollIntoView();
-      input.focus();
+      if (m.focus) input.focus();
     }
   });
 

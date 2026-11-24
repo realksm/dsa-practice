@@ -393,7 +393,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (!file) return;
       lastFile = file;
       if (panel.current.file !== file) panel.update({ ...emptyState(), file });
-      panel.show({ focusCustomInput: input === undefined });
+      panel.show(input === undefined ? { focusCustomInput: true } : { customInput: input });
       // `input` is passed by tests / other commands; normally the user types it in the panel
       if (input !== undefined) return runCustom(file, input);
     }),

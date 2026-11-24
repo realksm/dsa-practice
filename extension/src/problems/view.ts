@@ -332,10 +332,14 @@ export function registerProblems(ctx: vscode.ExtensionContext, solved: SolvedSto
   /** Statement on the right (rendered), solution on the left with the cursor in it. */
   async function show(result: InstallResult) {
     const md = vscode.Uri.file(path.join(result.dir, "problem.md"));
+    // The solution first: "to the side" is beside the active editor, and with no editor open
+    // (a fresh window) the statement would otherwise land in the same group as the solution.
+    const sol = result.solution ? vscode.Uri.file(result.solution) : undefined;
+    if (sol) await vscode.window.showTextDocument(sol, { viewColumn: vscode.ViewColumn.One, preview: false });
     await vscode.commands.executeCommand("markdown.showPreviewToSide", md).then(undefined, () =>
       vscode.window.showTextDocument(md, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }),
     );
-    if (result.solution) await vscode.window.showTextDocument(vscode.Uri.file(result.solution), { viewColumn: vscode.ViewColumn.One, preview: false });
+    if (sol) await vscode.window.showTextDocument(sol, { viewColumn: vscode.ViewColumn.One, preview: false });
   }
 
   /**

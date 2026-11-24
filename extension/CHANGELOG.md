@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Opening a problem in a window with no file open now puts the statement beside the solution, not
+  in a tab behind it.
+- A crash's error output no longer starts with an empty line.
+- README: a walkthrough with screenshots (taken by `npm run screenshots`).
+
 ## 0.4.0 (2026-11-24)
 
 - C++ crashes now show where they happened: "Crashed at ... (solution.cpp:12)" in the results panel,
