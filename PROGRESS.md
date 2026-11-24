@@ -318,5 +318,5 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
    `npx vsce login` + `npx vsce publish`).
 4. More problems: `npm run new <slug>` (add `-- --checker --hints` as needed), `npm run build -- --stress`, commit, push.
    Both published problems have hints.md (c070ada).
-5. CI `unit` job (ubuntu + windows, `npm test` with g++/Java 21/Python 3.12) added 2026-11-24, not pushed
-   yet. It's the first run of the POSIX memwatch path anywhere; check its result after the push.
+5. CI `unit` job (ubuntu + windows, `npm test` with g++/Java 21/Python 3.12) added 2026-11-24 (3137373):
+   green on both, 86/86 with none skipped on Linux (memwatch POSIX path, MLE and the 256 MB stack work).
