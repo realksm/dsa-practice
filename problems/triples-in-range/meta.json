@@ -1,0 +1,8 @@
+{
+  "title": "Triples in a Range",
+  "difficulty": "medium",
+  "tags": ["arrays", "two-pointers", "sorting", "counting"],
+  "timeLimit": 1,
+  "memoryLimit": 256,
+  "timeMultipliers": { "python": 2 }
+}

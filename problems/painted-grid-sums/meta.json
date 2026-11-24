@@ -1,0 +1,8 @@
+{
+  "title": "Painted Grid Sums",
+  "difficulty": "hard",
+  "tags": ["prefix-sums", "difference-array", "matrix", "hashing", "counting"],
+  "timeLimit": 2,
+  "memoryLimit": 256,
+  "timeMultipliers": { "python": 2 }
+}

@@ -322,5 +322,9 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
    `npx vsce login` + `npx vsce publish`).
 4. More problems: `npm run new <slug>` (add `-- --checker --hints` as needed), `npm run build -- --stress`, commit, push.
    Both published problems have hints.md (c070ada).
+   2026-11-24: added triples-in-range (two pointers), steady-segments (sliding window) and
+   painted-grid-sums (prefix sums / 2D difference array), all with hints. Their test inputs come
+   from references/<slug>/make_tests.py (run from the repo root, then npm run build -- <slug>).
+   A Python solution of each passes in the extension's judge (slowest 1.0 s of painted's 2 s x2).
 5. CI `unit` job (ubuntu + windows, `npm test` with g++/Java 21/Python 3.12) added 2026-11-24 (3137373):
    green on both, 86/86 with none skipped on Linux (memwatch POSIX path, MLE and the 256 MB stack work).
