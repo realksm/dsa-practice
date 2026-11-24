@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-24)
 
 - C++ crashes now show where they happened: "Crashed at ... (solution.cpp:12)" in the results panel,
   and the line is marked in the editor, for bad pointers, division by zero, stack overflows, failed

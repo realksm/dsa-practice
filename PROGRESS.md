@@ -333,6 +333,11 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
 - **v0.3.1** (2026-11-24): https://github.com/realksm/dsa-practice/releases/tag/v0.3.1, with
   `dsa-drill-0.3.1.vsix` attached (37 files, 84 KB, SHA-256 0bcf7674...bb0807): 256 MB stack on Linux/Mac.
   CI green on main and the tag.
+- **v0.4.0** (2026-11-24): https://github.com/realksm/dsa-practice/releases/tag/v0.4.0, with
+  `dsa-drill-0.4.0.vsix` attached (39 files, 96 KB, SHA-256 68766f3f...9c9d55): C++ crash lines (Windows, Linux, Mac), local headers in the
+  compile cache, MLE during the run on Linux/Mac, Mac bits/stdc++.h and 256 MB stack. Before the
+  release, CI on aa40155 (run 45456838030) was green on Linux, Mac and Windows: 99/99 passed,
+  none skipped, on Linux and Mac.
 - New release: bump `version` in extension/package.json + package-lock.json (top two entries),
   CHANGELOG.md; the old line follows. Bump `version` in extension/package.json + CHANGELOG.md, `npm run package` in extension/,
   commit, `git tag -a vX.Y.Z`, push with the tag, then
@@ -340,7 +345,7 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
 
 ## Next steps
 
-0. v0.3.1 is released. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history.
+0. v0.4.0 is released. Try a C++ crash on a real Mac by hand if one is available. Try hints, stats, MLE and a checker by hand (F5); also Stress Test and the history.
 1. Look at the sidebar by eye in light and dark themes (icons, filter message, counts).
 2. Back up `references/`; delete `legacy/` when no longer wanted.
 3. Later, if wanted: Marketplace publish (real publisher id in package.json, 128x128 PNG icon,
