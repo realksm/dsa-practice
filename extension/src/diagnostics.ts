@@ -50,9 +50,11 @@ export function parseCompileErrors(output: string): CompileMessage[] {
 
 /** Whether a path printed by the compiler refers to `source`. */
 export function sameFile(printed: string, source: string): boolean {
-  const a = path.resolve(printed).toLowerCase();
+  // MinGW prints Windows paths; on Linux/Mac path.* wouldn't split them at "\".
+  const p = printed.replace(/\\/g, "/");
+  const a = path.resolve(p).toLowerCase();
   const b = path.resolve(source).toLowerCase();
-  return a === b || path.basename(printed).toLowerCase() === path.basename(source).toLowerCase();
+  return a === b || path.basename(p).toLowerCase() === path.basename(source.replace(/\\/g, "/")).toLowerCase();
 }
 
 /**
