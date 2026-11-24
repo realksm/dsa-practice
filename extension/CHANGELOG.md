@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- C++ crashes now show where they happened: "Crashed at ... (solution.cpp:12)" in the results panel,
+  and the line is marked in the editor, for bad pointers, division by zero, stack overflows, failed
+  asserts and uncaught exceptions (Windows, Linux and Mac; on a Mac it needs Xcode's command line
+  tools, which come with g++ there).
+- Editing a header next to your solution (`#include "my.h"`) now recompiles it.
+- Linux and Mac: going over the memory limit stops the program at once (MLE) instead of running on
+  to the time limit, and a stopped run no longer leaves the program running on Mac.
+- Mac: `#include <bits/stdc++.h>` now works with Apple's g++ (clang), and C++ gets a 256 MB stack
+  (before, macOS capped it at 64 MB).
+
 ## 0.3.1 (2026-11-24)
 
 - Linux and Mac: C++ (and every other solution run under the memory helper) now gets a 256 MB stack,

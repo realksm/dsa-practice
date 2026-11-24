@@ -21,6 +21,11 @@ export interface RunOptions {
   /** Kill the program if stdout + stderr exceed this. Default 64 MB. */
   maxOutputBytes?: number;
   signal?: AbortSignal;
+  /**
+   * POSIX: start the program as its own process group and kill the whole group, so programs it
+   * started die with it (memwatch's child on Mac, where there's no PR_SET_PDEATHSIG). No effect on Windows.
+   */
+  killGroup?: boolean;
 }
 
 /** Run a program with the given stdin. Never throws. */
@@ -39,6 +44,7 @@ export function runProcess(cmd: string[], input: string, opts: RunOptions): Prom
       env: opts.env ?? process.env,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: !!opts.killGroup && process.platform !== "win32",
     });
 
     const finish = (r: Omit<RunResult, "stdout" | "stderr" | "timeMs">) => {
@@ -57,7 +63,13 @@ export function runProcess(cmd: string[], input: string, opts: RunOptions): Prom
     const kill = (why: "TLE" | "OLE" | "ABORT") => {
       if (killedFor) return;
       killedFor = why;
-      child.kill("SIGKILL");
+      if (opts.killGroup && process.platform !== "win32" && child.pid) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
+      } else child.kill("SIGKILL");
       // If a grandchild keeps the pipes open, don't wait forever for 'close'.
       setTimeout(() => finish({ status: why === "OLE" ? "OLE" : "TLE", exitCode: null, signal: "SIGKILL" }), 2000).unref();
     };

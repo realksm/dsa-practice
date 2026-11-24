@@ -5,8 +5,11 @@
  * - Windows: the program runs in a Job Object. The limit is enforced by the kernel (an allocation
  *   past it fails, and the job reports it); the peak is the job's peak committed memory. Killing the
  *   helper (time limit, Stop) kills the job.
- * - Linux / Mac: the peak is the child's max resident set (wait4). Over the limit = MLE afterwards;
- *   the time limit stops a runaway. On Linux the child dies with the helper (PR_SET_PDEATHSIG).
+ * - Linux / Mac: the peak is the child's max resident set (wait4). A watcher thread polls the
+ *   child's memory every 5 ms (Linux: resident set from /proc; Mac: phys_footprint) and kills it
+ *   when it goes over the limit, so a runaway allocation stops there instead of at the time limit.
+ *   The helper runs as its own process group (RunOptions.killGroup), so killing it on a time limit
+ *   or Stop kills the child too; if the helper's parent dies, the watcher kills the child.
  *   The helper also raises the stack limit to 256 MB (or the hard limit), as Windows does with a
  *   linker flag.
  *
@@ -108,6 +111,7 @@ int wmain(int argc, wchar_t** argv) {
 }
 #else
 #include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -120,15 +124,56 @@ int wmain(int argc, wchar_t** argv) {
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
 
 static void report(const char* file, const char* text) {
   FILE* f = fopen(file, "wb");
   if (f) { fputs(text, f); fclose(f); }
 }
 
+static pid_t child;
+static pid_t parent0;
+static double limitBytes;
+static volatile int limitHit = 0;
+
+/* The child's current memory in bytes, or -1 if it can't be read. */
+static double currentBytes(void) {
+#ifdef __linux__
+  char path[64];
+  sprintf(path, "/proc/%d/statm", (int)child);
+  FILE* f = fopen(path, "r");
+  if (!f) return -1;
+  unsigned long size = 0, resident = 0;
+  int ok = fscanf(f, "%lu %lu", &size, &resident) == 2;
+  fclose(f);
+  return ok ? (double)resident * (double)sysconf(_SC_PAGESIZE) : -1;
+#elif defined(__APPLE__)
+  struct rusage_info_v2 ri;
+  if (proc_pid_rusage(child, RUSAGE_INFO_V2, (rusage_info_t*)&ri) != 0) return -1;
+  return (double)ri.ri_phys_footprint;
+#else
+  return -1;
+#endif
+}
+
+/* Every 5 ms: kill the child when it goes over the limit (instead of finding out afterwards), and
+   when this helper's parent is gone (the editor died: nothing would ever stop the child). */
+static void* watch(void* arg) {
+  (void)arg;
+  struct timespec d = {0, 5 * 1000 * 1000};
+  for (;;) {
+    nanosleep(&d, NULL);
+    if (getppid() != parent0) { kill(child, SIGKILL); _exit(125); }
+    if (limitBytes > 0 && currentBytes() > limitBytes) { limitHit = 1; kill(child, SIGKILL); return NULL; }
+  }
+}
+
 int main(int argc, char** argv) {
   if (argc < 4) { fputs("usage: memwatch <limitMB> <report> <program> [args...]\n", stderr); return 125; }
-  double limitMb = atof(argv[1]);
+  limitBytes = atof(argv[1]) * 1024.0 * 1024.0;
+  parent0 = getppid();
   struct timespec t0, t1;
   clock_gettime(CLOCK_MONOTONIC, &t0);
   pid_t pid = fork();
@@ -150,6 +195,9 @@ int main(int argc, char** argv) {
     report(argv[2], buf);
     _exit(126);
   }
+  child = pid;
+  pthread_t th;
+  pthread_create(&th, NULL, watch, NULL);
   int status = 0;
   struct rusage ru;
   while (wait4(pid, &status, 0, &ru) < 0 && errno == EINTR) {}
@@ -165,7 +213,7 @@ int main(int argc, char** argv) {
     fclose(f);
     if (c == 's') return 126;
   }
-  int hit = limitMb > 0 && (double)peak > limitMb * 1024.0 * 1024.0;
+  int hit = limitHit || (limitBytes > 0 && (double)peak > limitBytes);
   char buf[128];
   sprintf(buf, "%llu %d %.3f\n", peak, hit, (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6);
   report(argv[2], buf);
@@ -204,7 +252,7 @@ async function build(compiler: string, key: string): Promise<string | undefined>
     const src = path.join(dir, "memwatch.cpp");
     await fs.writeFile(src, MEMWATCH_SOURCE);
     const tmp = path.join(dir, `memwatch-${process.pid}-${Date.now()}${IS_WIN ? ".exe" : ""}`);
-    const args = IS_WIN ? ["-O2", "-municode", "-static", "-o", tmp, src] : ["-O2", "-o", tmp, src];
+    const args = IS_WIN ? ["-O2", "-municode", "-static", "-o", tmp, src] : ["-O2", "-pthread", "-o", tmp, src];
     const r = await runProcess([compiler, ...args], "", { timeoutMs: 60_000, cwd: dir });
     if (r.status !== "OK" || !existsSync(tmp)) {
       await fs.rm(tmp, { force: true }).catch(() => {});
@@ -267,13 +315,14 @@ export async function runMeasured(
   const cmd = commandFor(program, opts.memoryLimitMb);
   const runOpts: RunOptions = { timeoutMs: opts.timeoutMs, cwd: opts.cwd, env: program.env, maxOutputBytes: opts.maxOutputBytes, signal: opts.signal };
   if (!opts.memwatch) return runProcess(cmd, input, runOpts);
+  const watchOpts: RunOptions = { ...runOpts, killGroup: true };
 
   // Java: the -Xmx cap does the limiting; a hard cap on the whole JVM would count its own overhead.
   const hardLimit = program.language === "java" ? 0 : opts.memoryLimitMb ?? 0;
   const reportFile = path.join(os.tmpdir(), `dsa-drill-mem-${process.pid}-${++reportSeq}.txt`);
   const args = IS_WIN ? [String(hardLimit), reportFile, cmd.map(quoteWindowsArg).join(" ")] : [String(hardLimit), reportFile, ...cmd];
   try {
-    const r = await runProcess([opts.memwatch, ...args], input, runOpts);
+    const r = await runProcess([opts.memwatch, ...args], input, watchOpts);
     const text = await fs.readFile(reportFile, "utf8").catch(() => "");
     if (text.startsWith("spawn_error")) return runProcess(cmd, input, runOpts);
     const m = text.trim().split(/\s+/);

@@ -148,7 +148,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   /** Mark where the first crashed case died, from its traceback / stack trace. */
   function showRuntimeError(file: string, crashed: CaseResult | undefined) {
     if (!crashed) return;
-    const m = parseRuntimeError(crashed.stderr, file);
+    const m = parseRuntimeError(crashed.stderr, file, crashed.message);
     if (!m) return;
     const uri = vscode.Uri.file(file);
     const label = crashed.name === "custom" ? "Custom input" : `Case ${crashed.name}`;

@@ -12,6 +12,7 @@ import type { ProgramCache } from "./cache";
 import { CompareOptions } from "./compare";
 import { findChecker } from "./checker";
 import { CaseContext, CaseResult, memoryLimitFor, runCase, timeLimitFor, withChecker, withProgram } from "./judge";
+import { crashOutput } from "./crash";
 import { getMemwatch } from "./memory";
 import { LanguageId, languageOf, PrepareResult, Program, ToolPaths } from "./languages";
 import { describeExit, runProcess, RunResult } from "./runner";
@@ -95,12 +96,14 @@ export async function stressTest(solutionPath: string, opts: StressOptions = {})
           opts.onProgress?.(seed, runs);
           const gr = await runProcess([...g.command, String(seed)], "", { timeoutMs: helperMs, env: g.env, signal: opts.signal });
           if (opts.signal?.aborted) return { kind: "cancelled", runs: seed - 1 };
+          gr.stderr = await crashOutput(g, gr.stderr);
           const gErr = helperError(gr);
           if (gErr) return { kind: "helperFailed", file: helpers.gen!, seed, message: gErr };
           const input = normalise(gr.stdout);
 
           const br = await runProcess(b.command, input, { timeoutMs: helperMs, env: b.env, signal: opts.signal });
           if (opts.signal?.aborted) return { kind: "cancelled", runs: seed - 1 };
+          br.stderr = await crashOutput(b, br.stderr);
           const bErr = helperError(br);
           if (bErr) return { kind: "helperFailed", file: helpers.brute!, seed, message: bErr, input };
 

@@ -10,6 +10,7 @@
 import { promises as fs } from "fs";
 import * as os from "os";
 import * as path from "path";
+import { crashOutput } from "./crash";
 import { languageOf, Program } from "./languages";
 import { describeExit, runProcess } from "./runner";
 import { DATA_DIR } from "./tests";
@@ -47,6 +48,7 @@ export class Checker {
     await Promise.all([fs.writeFile(inF, input), fs.writeFile(outF, output), fs.writeFile(ansF, answer)]);
     const r = await runProcess([...this.program.command, inF, outF, ansF], "", { timeoutMs: CHECKER_TIMEOUT_MS, env: this.program.env, signal });
     if (signal?.aborted) return { ok: true }; // the caller drops a cancelled case anyway
+    r.stderr = await crashOutput(this.program, r.stderr);
     const said = (r.stdout + (r.stdout && r.stderr ? "\n" : "") + r.stderr).trim();
     if (r.status === "OK") return { ok: true };
     if (r.status === "RE" && !r.spawnError && (r.exitCode === 1 || r.exitCode === 2)) {

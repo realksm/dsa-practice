@@ -20,13 +20,14 @@ jobs:
         working-directory: extension
       - run: npm run check
 
-  # The extension's unit tests (node:test) with real compilers. Linux covers the POSIX memwatch path,
-  # which is otherwise only tried on Windows by hand. Tests whose compiler is missing are skipped.
+  # The extension's unit tests (node:test) with real compilers. Linux and Mac cover the POSIX memwatch
+  # path and their crash reporters; Mac's g++ is Apple clang (libc++, atos, no bits/stdc++.h).
+  # Tests whose compiler is missing are skipped.
   unit:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

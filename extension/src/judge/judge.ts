@@ -4,6 +4,7 @@ import * as path from "path";
 import { Checker, CheckerError, findChecker } from "./checker";
 import { CompareOptions, Difference, firstDifference, outputsMatch } from "./compare";
 import type { ProgramCache } from "./cache";
+import { crashOutput } from "./crash";
 import { getMemwatch, runMeasured } from "./memory";
 import { DEFAULT_TIME_MULTIPLIERS, LanguageId, languageOf, prepare, PrepareResult, Program, ToolPaths } from "./languages";
 import { describeExit } from "./runner";
@@ -200,6 +201,7 @@ export async function withProgram<T>(
 
 export async function runCase(program: Program, c: TestCase, ctx: CaseContext, signal?: AbortSignal): Promise<CaseResult> {
   const r = await runMeasured(program, c.input, { timeoutMs: ctx.timeLimitMs, memoryLimitMb: ctx.memoryLimitMb, memwatch: ctx.memwatch, signal });
+  r.stderr = await crashOutput(program, r.stderr);
   const base = {
     name: c.name,
     timeMs: r.timeMs,

@@ -179,22 +179,47 @@ Opening a problem opens the solution on the left and the rendered `problem.md` o
   unless `dsaDrill.defaultLanguage` is set and no solution exists yet. "Open in Another Language" always asks.
 - The repo must be **public** (no token support).
 
+## Gaps closed 2026-11-24
+
+- **C++ crash -> line.** C++ is compiled with `-g` and linked with a small reporter object
+  (`src/judge/crash.ts`, built once per compiler into `%TEMP%/dsa-drill-crash-<hash>/crash.o`, like
+  memwatch). On a crash it writes one `@@dsa-drill-trace` line to stderr and lets the crash go on
+  (same exit code/signal). Windows: unhandled-exception filter + SIGABRT handler, stack walked with
+  RtlVirtualUnwind, offsets from the image base (ImageBase read from the PE header). Linux: handlers
+  on an alternate stack (so stack overflows report), backtrace(), PIE-relative. runCase (and the
+  stress helpers and the checker) turn it into "Crashed at ... at f(int) (solution.cpp:3)  x190"
+  with addr2line (next to g++, then PATH); parseRuntimeError reads that, plus failed asserts (MinGW
+  and glibc formats) and the uncaught exception's type. An abort on Windows prints the line twice
+  (handler, then fail-fast): every copy is stripped. Tried by hand on Windows: null pointer, /0,
+  vector::at, stack overflow all land on the right line.
+- **Headers in the compile cache.** The key also hashes every `#include "..."` file, recursively,
+  resolved next to the including file (missing ones too, so creating one invalidates). Not `<...>`.
+- **Memory during the run on Linux/Mac.** memwatch has a watcher thread (5 ms): over the limit it
+  kills the child (MLE right away instead of at the time limit), and if its parent changed it kills the
+  child and exits. memwatch is spawned as its own process group (`RunOptions.killGroup`, detached
+  on POSIX) and killed with `kill(-pid)`, so a TLE/Stop takes the child with it on Mac too.
+- **Mac.** Crash lines: the reporter's Mac half (signals on an alternate stack, frame-pointer walk
+  bounded by the thread's stack, addresses + the __TEXT load address as `@@dsa-drill-trace macho`),
+  symbolized with `atos -o exe -l <base> -i` (then `xcrun atos`), which reads the .dSYM clang writes
+  when it compiles and links with -g in one step. libc++'s "terminating due to uncaught exception of
+  type X: what" and Apple's "Assertion failed: (x), function f, file F, line N." are parsed.
+  `<bits/stdc++.h>`: Apple clang has none, so C++ on a Mac gets `-idirafter` a folder with one
+  (`src/judge/stdcpp.ts`, written to `%TEMP%/dsa-drill-include-<hash>`); a real GCC still uses its own.
+  Stack: macOS caps RLIMIT_STACK at 64 MB, so C++ is also linked with `-Wl,-stack_size,0x10000000`.
+  CI's `unit` job now runs on macos-latest too (arm64; the division-by-zero crash case is skipped on
+  arm64, where it doesn't trap).
+
 ## Known gaps / ideas (not blocking)
 
-- The compile cache keys on the solution's own text only: a change to a local header it `#include`s
-  isn't noticed until the solution changes (or VS Code restarts).
 - Linux/Mac stack: memwatch raises RLIMIT_STACK to 256 MB (capped at the hard limit) in the child
   before exec, matching Windows' linker flag. Before 2026-11-24 they kept the 8 MB default, so the
   deep-recursion test would have failed there. Without g++ (no memwatch) Python/Java keep the default.
-- C++ crashes (segfaults) aren't mapped to a line; only Python tracebacks and Java stack traces are.
 - Not checked by eye in light/dark themes yet; only checked that it renders. The sidebar hasn't been
   looked at by eye either (its contents are checked by the tests).
 - No proxy handling beyond what VS Code gives the global `fetch`.
-- Memory on Mac isn't enforced during the run (checked afterwards, like Linux) and a killed helper
-  can leave the child running there (Linux uses PR_SET_PDEATHSIG). Only Windows was tried by hand.
+- Mac: everything above has only run in CI (macos-latest), never on a real Mac by hand.
 - Without g++ memory isn't measured at all (Python/Java users without g++); the panel says so.
-- A checker can't `#include "testlib.h"` (only .in/.out/checker go in .data, and the compile cache
-  ignores headers). Checkers are written by hand against the documented argument order.
+- A checker can't `#include "testlib.h"` (only .in/.out/checker go in .data and get downloaded). Checkers are written by hand against the documented argument order.
 
 ## Phase 4 decisions (2026-11-22)
 

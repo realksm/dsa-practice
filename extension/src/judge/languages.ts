@@ -1,6 +1,8 @@
 import { existsSync } from "fs";
 import * as path from "path";
+import { addr2lineFor, getCrashReporter, reporterArgs } from "./crash";
 import { runProcess } from "./runner";
+import { stdcppArgs } from "./stdcpp";
 
 export type LanguageId = "cpp" | "java" | "python";
 
@@ -37,6 +39,8 @@ export interface Program {
   /** Command that runs the compiled program. */
   command: string[];
   env?: NodeJS.ProcessEnv;
+  /** C++ built with the crash reporter (crash.ts): how to turn its stack addresses into lines. */
+  crash?: { exe: string; source: string; addr2line: string[] };
 }
 
 /** `warnings`: what the compiler printed on a successful compile (empty if nothing). */
@@ -77,8 +81,16 @@ export async function prepare(src: string, workdir: string, tools: ToolPaths = {
       // the program loads whichever libstdc++-6.dll comes first on PATH (Git's mingw64 one, say),
       // which crashes programs built by a different MinGW.
       if (IS_WIN) args.push("-Wl,--stack,268435456", "-static");
+      // Mac: memwatch's setrlimit is capped at the 64 MB hard limit, so ask the linker for 256 MB,
+      // and supply <bits/stdc++.h>, which Apple clang lacks (stdcpp.ts).
+      if (process.platform === "darwin") args.push("-Wl,-stack_size,0x10000000", ...(await stdcppArgs()));
+      // -g + the crash reporter: a crash prints where it happened (crash.ts). Same speed.
+      const reporter = await getCrashReporter(t.cpp);
+      if (reporter) args.push(...reporterArgs(reporter));
       const c = await compile([t.cpp, ...args], "cpp", workdir);
-      return "error" in c ? { ok: false, error: c.error } : { ok: true, program: { language, command: [exe] }, warnings: c.warnings };
+      if ("error" in c) return { ok: false, error: c.error };
+      const crash = reporter ? { exe, source: src, addr2line: addr2lineFor(t.cpp) } : undefined;
+      return { ok: true, program: { language, command: [exe], ...(crash ? { crash } : {}) }, warnings: c.warnings };
     }
     case "java": {
       const c = await compile([t.javac, "-encoding", "UTF-8", "-d", workdir, src], "javac", workdir);

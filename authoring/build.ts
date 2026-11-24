@@ -17,6 +17,7 @@ import { promises as fs } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { Checker, CheckerError, findChecker } from "../extension/src/judge/checker";
+import { stripTrace } from "../extension/src/judge/crash";
 import { outputsMatch } from "../extension/src/judge/compare";
 import { languageOf, prepare, type Program } from "../extension/src/judge/languages";
 import { describeExit, runProcess, type RunResult } from "../extension/src/judge/runner";
@@ -77,7 +78,7 @@ function failed(r: RunResult, what: string): string | null {
   if (r.spawnError) return `${what} could not be started: ${r.spawnError}`;
   if (r.status === "TLE") return `${what} did not finish`;
   if (r.status === "OLE") return `${what} printed too much output`;
-  if (r.status === "RE") return `${what} crashed (${describeExit(r.exitCode, r.signal)})` + (r.stderr.trim() ? `:\n${indent(tail(r.stderr))}` : "");
+  if (r.status === "RE") return `${what} crashed (${describeExit(r.exitCode, r.signal)})` + (stripTrace(r.stderr).trim() ? `:\n${indent(tail(stripTrace(r.stderr)))}` : "");
   return null;
 }
 
